@@ -1,0 +1,38 @@
+[package]
+name = "bevy_pg_scenes"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = "0.17"
+libm = "0.2.15"
+log = { version = "0.4", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
+serde = "1.0.228"
+
+# bevy_pg_nav = {path="../bevy_pg_nav"}
+bevy_pg_nav = {version = "1.17.0", git="https://www.github.com/PatrickChodowski/bevy_pg_nav"}
+
+# bevy_pg_core = {git="https://www.github.com/PatrickChodowski/bevy_pg_core"}
+bevy_pg_core = {path="../bevy_pg_core"}
+
+
+
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.wgpu-types]
+debug-assertions = false
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
