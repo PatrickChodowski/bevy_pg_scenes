@@ -859,7 +859,8 @@ fn track_pg_meshes(
     ass:            Res<AssetServer>,
     pgmeshes:       Res<Assets<PGSerializedMesh>>,
     mut meshes:     ResMut<Assets<Mesh>>,
-    query:          Query<(Entity, &UpdateMesh)>
+    query:          Query<(Entity, &UpdateMesh)>,
+    terrain_chunks: Query<&Mesh3d, With<TerrainChunk>>,
 ){
     for (entity, update_mesh) in query.iter(){
         if let Some(load_state) = ass.get_load_state(&update_mesh.handle){
@@ -868,8 +869,17 @@ fn track_pg_meshes(
                 LoadState::Loaded => {
                     if let Some(pgmesh) = pgmeshes.get(&update_mesh.handle){
                         let terrain_mesh: Mesh = pgmesh.data.clone().into_mesh();
-                        commands.entity(update_mesh.entity).insert(Mesh3d(meshes.add(terrain_mesh)));
-                        commands.entity(entity).despawn();
+
+                        if let Ok(current_mesh) = terrain_chunks.get(update_mesh.entity){
+                            meshes.remove(&current_mesh.0);
+                            commands.entity(update_mesh.entity).remove::<Mesh3d>();
+                            commands.entity(update_mesh.entity).insert(Mesh3d(meshes.add(terrain_mesh)));
+                            commands.entity(entity).despawn();
+
+                        } else {
+                            commands.entity(entity).despawn();
+                        }
+
                     } else {
                         commands.entity(entity).despawn();
                     }
