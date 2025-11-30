@@ -872,7 +872,7 @@ fn track_pg_meshes(
 
                         if let Ok(current_mesh) = terrain_chunks.get(update_mesh.entity){
                             meshes.remove(&current_mesh.0);
-                            commands.entity(update_mesh.entity).remove::<Mesh3d>();
+                            // commands.entity(update_mesh.entity).remove::<Mesh3d>();
                             commands.entity(update_mesh.entity).insert(Mesh3d(meshes.add(terrain_mesh)));
                             commands.entity(entity).despawn();
 
