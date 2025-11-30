@@ -3,12 +3,14 @@ use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
 use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player};
+use bevy::mesh::SerializedMesh;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::asset::RenderAssetUsages;
 use bevy_pg_nav::prelude::{NavMesh, GenerateNavMesh};
 use std::cmp::Ordering;
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::math::Vec3;
+use bevy_common_assets::json::JsonAssetPlugin;
 
 use crate::water::{WaterChunk, WaterData, water_bundle};
 use crate::water::depth::render_to_depth;
@@ -21,7 +23,6 @@ pub struct PGScenesSettings {
     pub spawners_mapping: fn(name: String, option: Option<String>) -> Spawner
 }
 
-
 pub struct PGScenesPlugin {
     pub map_resolution: usize,
     pub water_height:   f32,
@@ -29,9 +30,16 @@ pub struct PGScenesPlugin {
     pub spawners_mapping: fn(name: String, option: Option<String>) -> Spawner
 }
 
+#[derive(Resource, Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
+pub struct PGSerializedMesh {
+    pub data: SerializedMesh
+}
+
+
 impl Plugin for PGScenesPlugin {
     fn build(&self, app: &mut App) {
         app
+        .add_plugins(JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]))
         .insert_resource(PGScenesSettings{
             map_resolution: self.map_resolution,
             water_height: self.water_height,
@@ -502,6 +510,12 @@ pub fn spawn_terrain_chunk(
 ){
     let base_name = format!("maps/{}_{}", map_name, chunk.chunk_id);
     let terrain_filepath = format!("{}.glb", base_name);
+
+
+    let possible_path = format!("meshes/maps/{}_{}.mesh.json", map_name, chunk.chunk_id);
+
+    let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(possible_path);
+
 
     let terrain_scene_mesh: Handle<Mesh> = ass.load_with_settings(
         GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(terrain_filepath.clone()),
