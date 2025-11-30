@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player};
 use bevy::mesh::SerializedMesh;
 use bevy::gltf::GltfLoaderSettings;
-use bevy::asset::RenderAssetUsages;
+use bevy::asset::{LoadState, RenderAssetUsages};
 use bevy_pg_nav::prelude::{NavMesh, GenerateNavMesh};
 use std::cmp::Ordering;
 use bevy::platform::collections::{HashMap, HashSet};
@@ -30,10 +30,17 @@ pub struct PGScenesPlugin {
     pub spawners_mapping: fn(name: String, option: Option<String>) -> Spawner
 }
 
-#[derive(Resource, Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
+#[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
 pub struct PGSerializedMesh {
     pub data: SerializedMesh
 }
+
+#[derive(Component)]
+struct UpdateMesh {
+    entity: Entity,
+    handle: Handle<PGSerializedMesh>
+}
+
 
 
 impl Plugin for PGScenesPlugin {
@@ -66,6 +73,7 @@ impl Plugin for PGScenesPlugin {
                 loading_scene_from_save.run_if(resource_exists::<LoadSaveResources>),
             ).run_if(in_state(GameState::Transition))
         )
+        .add_systems(Update, track_pg_meshes.run_if(any_with_component::<UpdateMesh>))
         ;
     }
 }
@@ -511,12 +519,6 @@ pub fn spawn_terrain_chunk(
     let base_name = format!("maps/{}_{}", map_name, chunk.chunk_id);
     let terrain_filepath = format!("{}.glb", base_name);
 
-
-    let possible_path = format!("meshes/maps/{}_{}.mesh.json", map_name, chunk.chunk_id);
-
-    let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(possible_path);
-
-
     let terrain_scene_mesh: Handle<Mesh> = ass.load_with_settings(
         GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(terrain_filepath.clone()),
         |settings: &mut GltfLoaderSettings| settings.load_meshes = RenderAssetUsages::all()
@@ -526,7 +528,7 @@ pub fn spawn_terrain_chunk(
         GltfAssetLabel::Material { index: 0, is_scale_inverted: false}.from_asset(terrain_filepath)
     );
 
-    commands.spawn((
+    let terrain_chunk_entity = commands.spawn((
         Mesh3d(terrain_scene_mesh),
         MeshMaterial3d(terrain_scene_mat),
         Transform::from_xyz(chunk.loc_x, 0.0, chunk.loc_y),
@@ -541,7 +543,12 @@ pub fn spawn_terrain_chunk(
         Pickable::IGNORE,
         DespawnOnExit(GameState::Play),
         render_to_depth()
-    ));
+    )).id();
+
+    let possible_path = format!("meshes/maps/{}_{}.mesh.json", map_name, chunk.chunk_id);
+    let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(possible_path);
+
+    commands.spawn(UpdateMesh{entity: terrain_chunk_entity, handle: handle_serialized_mesh});
 }
 
 
@@ -844,4 +851,34 @@ pub fn load_asset(
             commands.entity(entity).insert(SceneRoot(scene_handle));
         }
     }
+}
+
+
+fn track_pg_meshes(
+    mut commands:   Commands,
+    ass:            Res<AssetServer>,
+    pgmeshes:       Res<Assets<PGSerializedMesh>>,
+    mut meshes:     ResMut<Assets<Mesh>>,
+    query:          Query<(Entity, &UpdateMesh)>
+){
+    for (entity, update_mesh) in query.iter(){
+        if let Some(load_state) = ass.get_load_state(&update_mesh.handle){
+            match load_state {
+                LoadState::Failed(_) => {commands.entity(entity).despawn();}
+                LoadState::Loaded => {
+                    if let Some(pgmesh) = pgmeshes.get(&update_mesh.handle){
+                        let terrain_mesh: Mesh = pgmesh.data.clone().into_mesh();
+                        commands.entity(update_mesh.entity).insert(Mesh3d(meshes.add(terrain_mesh)));
+                        commands.entity(entity).despawn();
+                    } else {
+                        commands.entity(entity).despawn();
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            commands.entity(entity).despawn();
+        }
+    }
+
 }
