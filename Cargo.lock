@@ -1066,7 +1066,6 @@ dependencies = [
 [[package]]
 name = "bevy_pg_nav"
 version = "1.17.0"
-source = "git+https://www.github.com/PatrickChodowski/bevy_pg_nav#209b8314f4fbce52ffeafc63c362cd4828a8540a"
 dependencies = [
  "bevy",
  "bevy_common_assets",
