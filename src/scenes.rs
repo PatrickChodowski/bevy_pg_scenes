@@ -552,18 +552,6 @@ pub fn spawn_terrain_chunk(
 }
 
 
-#[derive(Component, Reflect, Debug)]
-pub struct TerrainChunk {
-    pub loc:  Vec2,
-    pub tile: Tile,
-    pub dims: Vec2,
-    pub map_name: String,
-    pub chunk_id: String,
-}
-
-
-
-
 #[derive(Hash, Debug, Eq, PartialEq, Copy, Clone, Reflect, Serialize, Deserialize)]
 
 pub struct Tile {
