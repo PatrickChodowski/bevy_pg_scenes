@@ -6,9 +6,9 @@ use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use libm::sinf;
-use bevy_pg_core::prelude::GameState;
+use bevy_pg_core::prelude::{GameState, Tile};
 
-use crate::scenes::{Chunk, Tile};
+use crate::scenes::Chunk;
 
 pub mod depth;
 use crate::water::depth::WaterdepthPlugin;

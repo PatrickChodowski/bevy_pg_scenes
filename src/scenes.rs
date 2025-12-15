@@ -2,12 +2,11 @@
 use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
-use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player};
+use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player, TerrainChunk, Tile};
 use bevy::mesh::SerializedMesh;
 use bevy::gltf::GltfLoaderSettings;
 use bevy::asset::{LoadState, RenderAssetUsages};
-use bevy_pg_nav::prelude::{NavMesh, GenerateNavMesh};
-use std::cmp::Ordering;
+use bevy_pg_nav::prelude::{PGNavmesh, GenerateNavMesh};
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::math::Vec3;
 use bevy_common_assets::json::JsonAssetPlugin;
@@ -345,7 +344,7 @@ fn track_navmesh_load(
     mut commands:    Commands,
     ass:             Res<AssetServer>,
     query:           Query<(Entity, &LoadingNavMeshHandle)>,
-    ass_nav:         Res<Assets<NavMesh>>,
+    ass_nav:         Res<Assets<PGNavmesh>>,
     mapsdata:        Res<MapsData>
 ){
 
@@ -377,7 +376,7 @@ fn track_navmesh_load(
 #[derive(Component)]
 struct  LoadingNavMeshHandle{
     name:           String,
-    handle:         Handle<NavMesh>,
+    handle:         Handle<PGNavmesh>,
     chunk_id:       String,
     map_name:       String
 }
@@ -551,42 +550,6 @@ pub fn spawn_terrain_chunk(
     commands.spawn(UpdateMesh{entity: terrain_chunk_entity, handle: handle_serialized_mesh});
 }
 
-
-#[derive(Hash, Debug, Eq, PartialEq, Copy, Clone, Reflect, Serialize, Deserialize)]
-
-pub struct Tile {
-    pub x: usize,
-    pub y: usize
-}
-impl Tile {
-    pub fn new(x: usize, y: usize) -> Self {
-        return Tile{x,y}
-    }
-    pub fn try_add(&self, x: isize, y: isize) -> Option<Tile> {
-        let maybe_x: isize = self.x as isize + x;
-        let maybe_y: isize = self.y as isize + y;
-
-        if (maybe_x >= 0) & (maybe_y >= 0){
-            return Some(Tile::new(maybe_x as usize, maybe_y as usize))
-        } else {
-            return None;
-        }
-
-    }
-}
-
-impl Ord for Tile {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.x.cmp(&other.x).then(other.y.cmp(&self.y))
-    }
-}
-
-impl PartialOrd for Tile {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Resource, Debug)]
 pub struct Scenes {
     pub data: HashMap<String, SceneData>
@@ -629,7 +592,7 @@ pub struct Chunk {
     pub aabb:       AABB
 }
 
-#[derive(Resource, Reflect, Clone, Serialize, Deserialize)]
+#[derive(Resource, Reflect, Clone)]
 #[reflect(Resource)]
 pub struct CurrentChunk {
     pub x:                  usize,
