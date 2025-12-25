@@ -325,14 +325,20 @@ fn locate(
 
         current_chunk.reset_tiles(&terrain_chunks);
 
-        let navmesh_filepath = format!("navmesh/{}_{}.navmesh.json", chunk.map_name, chunk.chunk_id);
-        info!("[SCENES] Spawning LoadingNavMeshHandle for {}", navmesh_filepath);
-        commands.spawn(LoadingNavMeshHandle{
-            name: format!("maps/{}_{}", chunk.map_name, chunk.chunk_id),
-            handle: ass.load(navmesh_filepath),
-            map_name: chunk.map_name.clone(),
-            chunk_id: chunk.chunk_id.clone()
-        });
+        let nav_filepaths = [
+            format!("navmesh/{}_{}_terrain.navmesh.json", chunk.map_name, chunk.chunk_id),
+            format!("navmesh/{}_{}_water.navmesh.json", chunk.map_name, chunk.chunk_id),
+        ];
+
+        for nav_filepath in nav_filepaths.iter(){
+            info!("[SCENES] Spawning LoadingNavMeshHandle for {}", nav_filepath);
+            commands.spawn(LoadingNavMeshHandle{
+                name: format!("maps/{}_{}", chunk.map_name, chunk.chunk_id),
+                handle: ass.load(nav_filepath),
+                map_name: chunk.map_name.clone(),
+                chunk_id: chunk.chunk_id.clone()
+            });
+        }
         
         break;
     }
@@ -353,8 +359,12 @@ fn track_navmesh_load(
         if let Some(load_state) = ass.get_load_state(&loading_nav.handle){
             if load_state.is_loaded() {
                 let navmesh = ass_nav.get(&loading_nav.handle).unwrap().clone();
-                info!("[NAVMESH] Polygon count: {}", navmesh.polygons.len());
-                commands.insert_resource(ass_nav.get(&loading_nav.handle).unwrap().clone());
+
+                // commands.spawn((
+                //     navmesh, navmesh.typ
+                // ));
+
+                // commands.insert_resource(ass_nav.get(&loading_nav.handle).unwrap().clone());
                 commands.entity(entity).despawn();
             }
 
