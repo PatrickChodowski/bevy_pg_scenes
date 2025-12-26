@@ -358,8 +358,8 @@ fn track_navmesh_load(
 
         if let Some(load_state) = ass.get_load_state(&loading_nav.handle){
             if load_state.is_loaded() {
-                let navmesh = ass_nav.get(&loading_nav.handle).unwrap().clone();
-                commands.spawn(navmesh);
+                let pgn = ass_nav.get(&loading_nav.handle).unwrap().clone();
+                commands.spawn(pgn);
                 commands.entity(entity).despawn();
             }
 
