@@ -217,11 +217,11 @@ pub fn setup_water_depth(
         Camera3d::default(),
         DespawnOnExit(GameState::Play),
         Camera {
-            target: RenderTarget::None {
-                size: UVec2::splat(DEPTH_TEXTURE_SIZE),
-            },
             order: MAIN_CAMERA_ORDER,
             ..Camera::default()
+        },
+        RenderTarget::None {
+            size: UVec2::splat(DEPTH_TEXTURE_SIZE),
         },
         Projection::Orthographic(projection.clone()),
         DepthPrepass,

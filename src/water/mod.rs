@@ -22,8 +22,6 @@ impl Plugin for WaterPlugin {
         app
         .insert_resource(WaveUpdate::new())
         .add_plugins(MaterialPlugin::<WaterMaterial> {
-            prepass_enabled: false,
-            shadows_enabled: true,
             ..default()
         })
         .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
@@ -94,8 +92,11 @@ fn animate_water(
 
 pub type WaterMaterial = ExtendedMaterial<StandardMaterial, WaterMaterialExtension>;
 
+
+
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
 pub struct WaterMaterialExtension {
+
     #[uniform(100)]
     pub scale: Vec2,
 
@@ -113,6 +114,9 @@ pub struct WaterMaterialExtension {
 
 
 impl MaterialExtension for WaterMaterialExtension {
+    fn enable_prepass() -> bool { false }
+    fn enable_shadows() -> bool { true }
+
     fn fragment_shader() -> ShaderRef {
         "shaders/water.wgsl".into()
     }
