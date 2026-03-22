@@ -19,14 +19,14 @@ pub struct PGScenesSettings {
     pub map_resolution: usize,
     pub water_height: f32,
     pub markers_mapping: fn(name: String) -> Marker,
-    pub spawners_mapping: fn(name: String, option: Option<String>) -> Spawner
+    pub spawners_mapping: fn(name: String, maybe_data: &Option<HashMap<String, String>>) -> Spawner
 }
 
 pub struct PGScenesPlugin {
     pub map_resolution: usize,
     pub water_height:   f32,
     pub markers_mapping: fn(name: String) -> Marker,
-    pub spawners_mapping: fn(name: String, option: Option<String>) -> Spawner
+    pub spawners_mapping: fn(name: String, maybe_data: &Option<HashMap<String, String>>) -> Spawner
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
@@ -465,7 +465,7 @@ fn redraw(
                     commands.spawn((
                         sod.transform(),
                         SceneChunk{tile: *tile}, 
-                        (scenes_settings.spawners_mapping)(name.to_string(), sod.option.clone()),
+                        (scenes_settings.spawners_mapping)(name.to_string(), &sod.data),
                         DespawnOnExit(GameState::Play),
                         name.clone()
                     ));
@@ -691,7 +691,7 @@ pub struct SceneObjectData {
     pub location:   Vec3,
     pub rotation:   Vec3,
     pub scale:      Vec3,
-    pub option:     Option<String>  // Hold NPC Type etc.
+    pub data:       Option<HashMap<String,String>>  // Hold NPC Type etc.
 } 
 impl SceneObjectData {
     pub fn transform(&self) -> Transform {
@@ -715,16 +715,16 @@ pub struct Spawnee;
 #[derive(Component, Reflect, Clone)]
 pub struct Spawner {
     pub id:     usize,
-    pub option: Option<String>, 
+    pub data:   HashMap<String, String>, // contain any key value data that might be useful to pass from editor to game
     pub active: bool
 }
 
 impl Spawner {
     pub fn new(id: usize) -> Self {
-        Spawner{id, active: true, option: None}
+        Spawner{id, active: true, data: HashMap::new()}
     }
-    pub fn with_option(&mut self, option: String) -> Self {
-        self.option = Some(option);
+    pub fn add(&mut self, k: String, v: String) -> Self {
+        self.data.insert(k, v);
         self.clone()
     }
 }
