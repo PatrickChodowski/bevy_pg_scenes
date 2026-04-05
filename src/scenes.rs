@@ -326,14 +326,14 @@ fn locate(
         current_chunk.reset_tiles(&terrain_chunks);
 
         let nav_filepaths = [
-            format!("navmesh/{}_{}_terrain.navmesh.json", chunk.map_name, chunk.chunk_id),
-            format!("navmesh/{}_{}_water.navmesh.json", chunk.map_name, chunk.chunk_id),
+            format!("navmesh/{}/{}_{}_terrain.navmesh.json", chunk.map_name, chunk.map_name, chunk.chunk_id),
+            format!("navmesh/{}/{}_{}_water.navmesh.json", chunk.map_name, chunk.map_name, chunk.chunk_id),
         ];
 
         for nav_filepath in nav_filepaths.iter(){
             info!("[SCENES] Spawning LoadingNavMeshHandle for {}", nav_filepath);
             commands.spawn(LoadingNavMeshHandle{
-                name: format!("maps/{}_{}", chunk.map_name, chunk.chunk_id),
+                name: format!("maps/{}/{}_{}", chunk.map_name, chunk.map_name, chunk.chunk_id),
                 handle: ass.load(nav_filepath),
                 map_name: chunk.map_name.clone(),
                 chunk_id: chunk.chunk_id.clone()
@@ -520,8 +520,10 @@ pub fn spawn_terrain_chunk(
     chunk:            &Chunk,
     chunk_size:       f32     
 ){
-    let base_name = format!("maps/{}_{}", map_name, chunk.chunk_id);
+    let base_name = format!("maps/{}/{}_{}", map_name, map_name, chunk.chunk_id);
     let terrain_filepath = format!("{}.glb", base_name);
+
+    info!("Spawning terrain chunk: {}", terrain_filepath);
 
     let terrain_scene_mesh: Handle<Mesh> = ass.load_with_settings(
         GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(terrain_filepath.clone()),
@@ -549,7 +551,7 @@ pub fn spawn_terrain_chunk(
         render_to_depth()
     )).id();
 
-    let possible_path = format!("meshes/maps/{}_{}.mesh.json", map_name, chunk.chunk_id);
+    let possible_path = format!("meshes/maps/{}/{}_{}.mesh.json", map_name, map_name, chunk.chunk_id);
     let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(possible_path);
 
     commands.spawn(UpdateMesh{entity: terrain_chunk_entity, handle: handle_serialized_mesh});
