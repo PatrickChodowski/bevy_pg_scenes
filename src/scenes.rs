@@ -3,16 +3,12 @@ use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
 use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player, TerrainChunk, Tile};
-use bevy::mesh::SerializedMesh;
-use bevy::gltf::GltfLoaderSettings;
-use bevy::asset::{LoadState, RenderAssetUsages};
 use bevy_pg_nav::prelude::{PGNavmesh, GenerateNavMesh};
 use bevy::platform::collections::{HashMap, HashSet};
 use bevy::math::Vec3;
-use bevy_common_assets::json::JsonAssetPlugin;
 
+use crate::terrain_planes::PGScenesTerrainPlanesPlugin;
 use crate::water::{WaterChunk, WaterData, water_bundle};
-use crate::water::depth::render_to_depth;
 
 #[derive(Resource)]
 pub struct PGScenesSettings {
@@ -29,29 +25,17 @@ pub struct PGScenesPlugin {
     pub spawners_mapping: fn(name: String, maybe_data: &Option<HashMap<String, String>>) -> Spawner
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
-pub struct PGSerializedMesh {
-    pub data: SerializedMesh
-}
-
-#[derive(Component)]
-struct UpdateMesh {
-    entity: Entity,
-    handle: Handle<PGSerializedMesh>
-}
-
-
 
 impl Plugin for PGScenesPlugin {
     fn build(&self, app: &mut App) {
         app
-        .add_plugins(JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]))
         .insert_resource(PGScenesSettings{
             map_resolution: self.map_resolution,
             water_height: self.water_height,
             spawners_mapping: self.spawners_mapping,
             markers_mapping: self.markers_mapping
         })
+        .add_plugins(PGScenesTerrainPlanesPlugin)
         .insert_resource(CurrentChunk::new())
         .insert_resource(Scenes::new())
         .add_systems(Update, add_chunk_aabbs.run_if(resource_added::<MapsData>))
@@ -72,7 +56,6 @@ impl Plugin for PGScenesPlugin {
                 loading_scene_from_save.run_if(resource_exists::<LoadSaveResources>),
             ).run_if(in_state(GameState::Transition))
         )
-        .add_systems(Update, track_pg_meshes.run_if(any_with_component::<UpdateMesh>))
         ;
     }
 }
@@ -115,7 +98,7 @@ fn load_static(
     for tile in currentchunk.to_spawn.iter(){
         let Some(chunk) = mapdata.get(tile) else {continue;};
         let sd = scenes.data.get(&chunk.chunk_id).unwrap();
-        spawn_terrain_chunk(&mut commands, &ass, &chunk.map_name, tile, chunk, mapdata.chunk_size);
+        // spawn_terrain_chunk(&mut commands, &ass, &chunk.map_name, tile, chunk, mapdata.chunk_size);
         let mut bundles = Vec::with_capacity(sd.objects.len());
         for (name, sods) in sd.objects.iter(){
 
@@ -433,7 +416,7 @@ fn redraw(
 
         let Some(chunk) = mapdata.get(tile) else {continue;};
         let sd = scenes.data.get(&chunk.chunk_id).unwrap();
-        spawn_terrain_chunk(&mut commands, &ass, &chunk.map_name, tile, chunk, mapdata.chunk_size);
+        // spawn_terrain_chunk(&mut commands, &ass, &chunk.map_name, tile, chunk, mapdata.chunk_size);
         let mut bundles = Vec::with_capacity(sd.objects.len());
 
         for (name, sods) in sd.objects.iter(){
@@ -509,53 +492,6 @@ fn add_chunk_aabbs(
     }
 }
 
-
-
-
-pub fn spawn_terrain_chunk(
-    commands:         &mut Commands,
-    ass:              &Res<AssetServer>,
-    map_name:         &String,
-    tile:             &Tile,
-    chunk:            &Chunk,
-    chunk_size:       f32     
-){
-    let base_name = format!("maps/{}/{}_{}", map_name, map_name, chunk.chunk_id);
-    let terrain_filepath = format!("{}.glb", base_name);
-
-    info!("Spawning terrain chunk: {}", terrain_filepath);
-
-    let terrain_scene_mesh: Handle<Mesh> = ass.load_with_settings(
-        GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(terrain_filepath.clone()),
-        |settings: &mut GltfLoaderSettings| settings.load_meshes = RenderAssetUsages::all()
-    );
-
-    let terrain_scene_mat: Handle<StandardMaterial> = ass.load(
-        GltfAssetLabel::Material { index: 0, is_scale_inverted: false}.from_asset(terrain_filepath)
-    );
-
-    let terrain_chunk_entity = commands.spawn((
-        Mesh3d(terrain_scene_mesh),
-        MeshMaterial3d(terrain_scene_mat),
-        Transform::from_xyz(chunk.loc_x, 0.0, chunk.loc_y),
-        TerrainChunk{
-            loc:  Vec2::new(chunk.loc_x, chunk.loc_y),
-            tile: *tile, 
-            dims: Vec2::new(chunk_size, chunk_size),
-            map_name: map_name.clone(),
-            chunk_id: chunk.chunk_id.clone()
-        }, 
-        Name::from(base_name.clone()),
-        Pickable::IGNORE,
-        DespawnOnExit(GameState::Play),
-        render_to_depth()
-    )).id();
-
-    let possible_path = format!("meshes/maps/{}/{}_{}.mesh.json", map_name, map_name, chunk.chunk_id);
-    let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(possible_path);
-
-    commands.spawn(UpdateMesh{entity: terrain_chunk_entity, handle: handle_serialized_mesh});
-}
 
 #[derive(Resource, Debug)]
 pub struct Scenes {
@@ -809,44 +745,4 @@ pub fn load_asset(
             commands.entity(entity).insert(SceneRoot(scene_handle));
         }
     }
-}
-
-
-fn track_pg_meshes(
-    mut commands:   Commands,
-    ass:            Res<AssetServer>,
-    pgmeshes:       Res<Assets<PGSerializedMesh>>,
-    mut meshes:     ResMut<Assets<Mesh>>,
-    query:          Query<(Entity, &UpdateMesh)>,
-    terrain_chunks: Query<&Mesh3d, With<TerrainChunk>>,
-){
-    for (entity, update_mesh) in query.iter(){
-        if let Some(load_state) = ass.get_load_state(&update_mesh.handle){
-            match load_state {
-                LoadState::Failed(_) => {commands.entity(entity).despawn();}
-                LoadState::Loaded => {
-                    if let Some(pgmesh) = pgmeshes.get(&update_mesh.handle){
-                        let terrain_mesh: Mesh = pgmesh.data.clone().into_mesh();
-
-                        if let Ok(current_mesh) = terrain_chunks.get(update_mesh.entity){
-                            meshes.remove(&current_mesh.0);
-                            // commands.entity(update_mesh.entity).remove::<Mesh3d>();
-                            commands.entity(update_mesh.entity).insert(Mesh3d(meshes.add(terrain_mesh)));
-                            commands.entity(entity).despawn();
-
-                        } else {
-                            commands.entity(entity).despawn();
-                        }
-
-                    } else {
-                        commands.entity(entity).despawn();
-                    }
-                }
-                _ => {}
-            }
-        } else {
-            commands.entity(entity).despawn();
-        }
-    }
-
 }
