@@ -1,12 +1,9 @@
 use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
-use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player, TerrainChunk, Tile};
+use bevy_pg_core::prelude::GameState;
 use bevy::mesh::SerializedMesh;
-use bevy::gltf::GltfLoaderSettings;
-use bevy::asset::{LoadState, RenderAssetUsages};
-use bevy_pg_nav::prelude::{PGNavmesh, GenerateNavMesh};
-use bevy::platform::collections::{HashMap, HashSet};
+use bevy::asset::LoadState;
 use bevy::math::Vec3;
 use bevy_common_assets::json::JsonAssetPlugin;
 
@@ -16,6 +13,7 @@ use crate::water::depth::render_to_depth;
 
 #[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
 pub struct PGSerializedMesh {
+    pub saved_loc:  Vec3,
     pub name: String,
     pub width: f32,
     pub height: f32,
@@ -26,16 +24,16 @@ pub struct PGSerializedMesh {
 #[derive(Component)]
 struct UpdateMesh {
     handle: Handle<PGSerializedMesh>,
+    maybe_loc: Option<Vec3>,
     for_editor: bool
 }
 
 #[derive(Event, Message)]
 pub struct LoadTerrainPlane {
     pub mesh_path: String,
-    pub loc: Vec3,
+    pub maybe_loc: Option<Vec3>,
     pub for_editor: bool
 }
-
 
 pub struct PGScenesTerrainPlanesPlugin;
 
@@ -53,8 +51,9 @@ impl Plugin for PGScenesTerrainPlanesPlugin {
 
 fn spawn_terrain_plane(
     path: String,
-    loc: Vec3,
+    maybe_loc: Option<Vec3>,
     commands: &mut Commands,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
     ass: &Res<AssetServer>,
     for_editor: bool
 ){
@@ -62,7 +61,7 @@ fn spawn_terrain_plane(
     let terrain_plane_entity = commands.spawn((
         // Mesh3d(terrain_scene_mesh),
         // MeshMaterial3d(terrain_scene_mat),
-        Transform::from_translation(loc),
+        MeshMaterial3d(materials.add(StandardMaterial::from(Color::WHITE))),
         DespawnOnExit(GameState::Play),
         render_to_depth()
     )).id();
@@ -75,6 +74,7 @@ fn spawn_terrain_plane(
 
     let handle_serialized_mesh: Handle<PGSerializedMesh> = ass.load(path);
     commands.entity(terrain_plane_entity).insert(UpdateMesh{
+        maybe_loc,
         handle: handle_serialized_mesh,
         for_editor: for_editor
     });
@@ -102,6 +102,15 @@ fn track_pg_meshes(
                     if let Some(pgmesh) = pgmeshes.get(&update_mesh.handle){
                         let terrain_mesh: Mesh = pgmesh.data.clone().into_mesh();
                         commands.entity(entity).insert(Mesh3d(meshes.add(terrain_mesh)));
+
+
+                        if let Some(loc) = update_mesh.maybe_loc {
+                            commands.entity(entity).insert(Transform::from_translation(loc));
+                        } else {
+                            commands.entity(entity).insert(Transform::from_translation(pgmesh.saved_loc));
+                        }
+
+
                         if update_mesh.for_editor {
                             commands.entity(entity).insert(PlaneToEdit::new(pgmesh.width, pgmesh.height, pgmesh.subdivisions));
                         }
@@ -119,12 +128,15 @@ fn track_pg_meshes(
 fn on_load_terrain_plane(
     trigger: On<LoadTerrainPlane>,
     mut commands: Commands,
-    ass:    Res<AssetServer>
+    ass:    Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ){
+    info!("On Load Terrain Plane");
     spawn_terrain_plane(
         trigger.mesh_path.clone(), 
-        trigger.loc, 
+        trigger.maybe_loc, 
         &mut commands,
+        &mut materials,
         &ass,
         trigger.for_editor
     );
@@ -134,13 +146,15 @@ fn on_load_terrain_plane(
 fn msg_load_terrain_plane(
     mut msgs: MessageReader<LoadTerrainPlane>,
     mut commands: Commands,
-    ass:    Res<AssetServer>
+    ass:    Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ){
     for msg in msgs.read(){
         spawn_terrain_plane(
             msg.mesh_path.clone(), 
-            msg.loc, 
+            msg.maybe_loc, 
             &mut commands,
+            &mut materials,
             &ass,
             msg.for_editor
         );

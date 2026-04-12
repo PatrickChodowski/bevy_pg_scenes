@@ -8,7 +8,7 @@ use bevy::shader::ShaderRef;
 use libm::sinf;
 use bevy_pg_core::prelude::{GameState, Tile};
 
-use crate::scenes::Chunk;
+// use crate::scenes::Chunk;
 
 pub mod depth;
 use crate::water::depth::WaterdepthPlugin;
@@ -43,14 +43,14 @@ pub struct WaterData{
 pub fn water_bundle(
     meshes:   &mut ResMut<Assets<Mesh>>,
     tile:     &Tile,
-    chunk:    &Chunk,
+    loc:      &Vec3,
     water_material:    Handle<WaterMaterial>,
     water_dim: f32
 ) -> impl Bundle {
     return(
         Mesh3d(meshes.add(Plane3d::default().mesh().size(water_dim, water_dim))),
         MeshMaterial3d(water_material),
-        Transform::from_xyz(chunk.loc_x, WATER_HEIGHT, chunk.loc_y),
+        Transform::from_translation(*loc),
         WaterChunk{
             tile: *tile
         }, 
