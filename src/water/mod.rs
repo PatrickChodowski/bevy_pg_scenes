@@ -24,6 +24,7 @@ impl Plugin for WaterPlugin {
         .add_plugins(MaterialPlugin::<WaterMaterial> {
             ..default()
         })
+        
         .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
         .add_plugins(WaterdepthPlugin)
         ;
@@ -35,30 +36,38 @@ impl Plugin for WaterPlugin {
 
 #[derive(Clone, Resource)]
 pub struct WaterData{
-    pub material: Handle<WaterMaterial>
+    pub material: Handle<WaterMaterial>,
+    pub animate_height: bool
 }
 
 
 
 pub fn water_bundle(
-    meshes:   &mut ResMut<Assets<Mesh>>,
-    tile:     &Tile,
-    loc:      &Vec3,
+    meshes:            &mut ResMut<Assets<Mesh>>,
     water_material:    Handle<WaterMaterial>,
-    water_dim: f32
+    loc:               &Vec3,
+    dims:              &Vec2,
 ) -> impl Bundle {
     return(
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(water_dim, water_dim))),
-        MeshMaterial3d(water_material),
+        water_mm(meshes, water_material, dims),
         Transform::from_translation(*loc),
-        WaterChunk{
-            tile: *tile
-        }, 
+        WaterChunk{dims: *dims},
         Name::from("water"),
         NotShadowCaster,
-        Pickable::IGNORE,
+        Pickable{should_block_lower: true, ..default()},
         DespawnOnExit(GameState::Play),
     );
+}
+
+pub fn water_mm(
+    meshes: &mut ResMut<Assets<Mesh>>,
+    water_material:    Handle<WaterMaterial>,
+    dims: &Vec2
+) -> impl Bundle {
+    return (
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
+        MeshMaterial3d(water_material)
+    )
 }
 
 
@@ -77,8 +86,12 @@ impl WaveUpdate {
 fn animate_water(
     time:      Res<Time>,
     mut water: Query<&mut Transform, With<WaterChunk>>,
-    mut wave:  ResMut<WaveUpdate>
+    mut wave:  ResMut<WaveUpdate>,
+    water_data: Res<WaterData>
 ){
+    if !water_data.animate_height {
+        return
+    }
     wave.timer.tick(time.delta());
     if wave.timer.just_finished(){
         let factor_y = sinf(time.elapsed_secs())*0.018;
@@ -127,6 +140,6 @@ impl MaterialExtension for WaterMaterialExtension {
 
 #[derive(Component, Debug, Reflect)]
 
-pub struct WaterChunk {
-    pub tile: Tile
+pub struct WaterChunk{
+    pub dims: Vec2
 }

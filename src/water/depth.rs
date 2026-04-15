@@ -245,7 +245,8 @@ pub fn setup_water_depth(
             }
     });
     commands.insert_resource(WaterData{
-        material: water_material
+        material: water_material,
+        animate_height: false
     });
 }
 
