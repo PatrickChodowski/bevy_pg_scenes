@@ -5,7 +5,7 @@ use bevy::asset::LoadState;
 use bevy_pg_core::prelude::GameState;
 use bevy_common_assets::json::JsonAssetPlugin;
 
-use crate::spawners_markers::MSSettings;
+use crate::{spawners_markers::MSSettings, water::{WaterMaterial, WaterData, spawn_water}};
 
 pub struct PGPlaneScenesPlugin;
 
@@ -26,6 +26,9 @@ impl Plugin for PGPlaneScenesPlugin {
 
 fn track_pg_scenes(
     mut commands:   Commands,
+    mut meshes:     ResMut<Assets<Mesh>>,
+    mut materials:  ResMut<Assets<StandardMaterial>>,
+    water_data:     Res<WaterData>,
     ass:            Res<AssetServer>,
     pgscenes:       Res<Assets<SceneData>>,
     query:          Query<(Entity, &TrackLoadingScene)>,
@@ -41,7 +44,7 @@ fn track_pg_scenes(
                 LoadState::Loaded => {
                     info!("Loaded pg scene for entity: {}", entity);
                     if let Some(scene_data) = pgscenes.get(&track_loading_scene.handle){
-                        scene_data.spawn(track_loading_scene.maybe_loc, &mut commands, &ass, &sm_settings);
+                        scene_data.spawn(track_loading_scene.maybe_loc, &mut commands, &mut meshes, &mut materials, &water_data.material, &ass, &sm_settings, track_loading_scene.for_editor);
                         commands.entity(entity).remove::<TrackLoadingScene>();
                     }
                 }
@@ -104,12 +107,18 @@ pub struct Static;
 
 
 impl SceneData {
+
+    // Spawning scene from the scene file. All elements will be spawned from here 
     fn spawn(
         &self, 
         maybe_origin:    Option<Vec3>,
         commands:        &mut Commands, 
+        meshes:          &mut ResMut<Assets<Mesh>>,
+        materials:       &mut ResMut<Assets<StandardMaterial>>,
+        water_material:  &Handle<WaterMaterial>,
         ass:             &Res<AssetServer>, 
-        scenes_settings: &Res<MSSettings>
+        scenes_settings: &Res<MSSettings>,
+        for_editor: bool
     ) {
 
         let scene_origin: Vec3;
@@ -121,11 +130,11 @@ impl SceneData {
 
 
         let mut object_bundles = Vec::with_capacity(self.objects.len());
-        let mut spawner_bundles = Vec::with_capacity(self.objects.len());
-        let mut marker_bundles = Vec::with_capacity(self.objects.len());
+        let mut spawner_bundles = Vec::with_capacity(100);
+        let mut marker_bundles = Vec::with_capacity(100);
 
         for (name, sods) in self.objects.iter(){
-            if !(name.contains("Spawner_") | name.contains("Marker_")){
+            if !(name.contains("Spawner_") | name.contains("Marker_") | (name.as_str() == "water")){
                 let asset_path = format!("objects/{}.glb", name);
                 let mesh: Handle<Mesh> = ass.load(
                     GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(asset_path.clone()),
@@ -165,6 +174,11 @@ impl SceneData {
                             name.clone()
                         )
                     );
+                }
+            } else if name.as_str() == "water" {
+                for sod in sods.iter(){
+                    let dims = sod.scale.xz();
+                    spawn_water(commands, meshes, materials, water_material.clone(), &sod.location, &dims, for_editor);
                 }
             }
         }
