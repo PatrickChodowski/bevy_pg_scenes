@@ -1,4 +1,5 @@
 
+use bevy::color::palettes::css::{WHITE, BLUE};
 use bevy::prelude::*;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::reflect::Reflect;
@@ -12,8 +13,6 @@ use bevy_pg_core::prelude::{GameState, Tile};
 
 pub mod depth;
 use crate::water::depth::WaterdepthPlugin;
-
-pub const WATER_HEIGHT: f32 = 180.0;
 
 pub struct WaterPlugin;
 
@@ -42,32 +41,53 @@ pub struct WaterData{
 
 
 
-pub fn water_bundle(
+pub fn spawn_water(
+    commands:          &mut Commands,
     meshes:            &mut ResMut<Assets<Mesh>>,
+    materials:         &mut ResMut<Assets<StandardMaterial>>,
     water_material:    Handle<WaterMaterial>,
     loc:               &Vec3,
     dims:              &Vec2,
-) -> impl Bundle {
-    return(
-        water_mm(meshes, water_material, dims),
+    for_editor:        bool
+) -> Entity {
+    let water_entity = commands.spawn((
         Transform::from_translation(*loc),
         WaterChunk{dims: *dims},
         Name::from("water"),
         NotShadowCaster,
         Pickable{should_block_lower: true, ..default()},
         DespawnOnExit(GameState::Play),
-    );
+    )).id();
+
+    water_mm(water_entity, commands, meshes, materials, water_material, dims, for_editor);
+
+    return water_entity;
 }
 
 pub fn water_mm(
-    meshes: &mut ResMut<Assets<Mesh>>,
+    water_entity:      Entity,
+    commands:          &mut Commands,
+    meshes:            &mut ResMut<Assets<Mesh>>,
+    materials:         &mut ResMut<Assets<StandardMaterial>>,
     water_material:    Handle<WaterMaterial>,
-    dims: &Vec2
-) -> impl Bundle {
-    return (
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
-        MeshMaterial3d(water_material)
-    )
+    dims: &Vec2,
+    for_editor: bool
+) {
+    if for_editor {
+        commands.entity(water_entity).insert(
+            (
+                Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
+                MeshMaterial3d(materials.add(StandardMaterial::from_color(Color::from(BLUE).with_alpha(1.0))))
+            )
+        );
+    } else {
+        commands.entity(water_entity).insert(
+            (
+                Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
+                MeshMaterial3d(water_material),
+            )
+        );
+    }
 }
 
 

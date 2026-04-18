@@ -15,7 +15,7 @@ use bevy::{
 use bevy::camera::visibility::RenderLayers;
 
 use bevy_pg_core::prelude::GameState;
-use crate::water::{WaterData, WaterMaterial, WaterMaterialExtension, WATER_HEIGHT};
+use crate::water::{WaterData, WaterMaterial, WaterMaterialExtension};
 
 const MAIN_CAMERA_ORDER: isize = -1;
 const DEPTH_RENDER_LAYER: usize = 1;
@@ -100,7 +100,10 @@ fn spawn_wakes(
                     let loc = transform.translation;
                     let y_angle =  -transform.rotation.to_euler(EulerRot::ZYX).1;
                     let o = Vec2::new(1.72, 1.97)*transform.scale.xz();
-                    let y = WATER_HEIGHT as f32 -1.1*transform.scale.y;
+                    // let y = WATER_HEIGHT as f32 -1.1*transform.scale.y;
+
+
+                    let y = transform.translation.y -1.1*transform.scale.y;
                     let locs = vec![
                         rotate_point(&Vec3::new(loc.x + o.x, y, loc.z+o.y), &loc, y_angle),
                         rotate_point(&Vec3::new(loc.x - o.x, y, loc.z+o.y), &loc, y_angle),
@@ -118,7 +121,8 @@ fn spawn_wakes(
                     let loc = transform.translation;
                     let y_angle =  -transform.rotation.to_euler(EulerRot::ZYX).1;
                     let o = Vec2::new(1.72, 1.97)*transform.scale.xz();
-                    let y = WATER_HEIGHT -1.1*transform.scale.y;
+                    // let y = WATER_HEIGHT -1.1*transform.scale.y;
+                    let y = transform.translation.y -1.1*transform.scale.y;
                     let locs = vec![
                         rotate_point(&Vec3::new(loc.x + o.x, y, loc.z+o.y), &loc, y_angle),
                         rotate_point(&Vec3::new(loc.x - o.x, y, loc.z+o.y), &loc, y_angle)
@@ -230,7 +234,11 @@ pub fn setup_water_depth(
         camera_transform,
     ));
     
-    let water_height_depth: f32 = (WATER_HEIGHT - min_point)/(max_point - min_point);
+    // let water_height_depth: f32 = (WATER_HEIGHT - min_point)/(max_point - min_point);
+    // TODO: replace WATER_HEIGHT WITH ANYTHING
+    let water_height_depth: f32 = (0.0 - min_point)/(max_point - min_point);
+
+    // let y = transform.translation.y -1.1*transform.scale.y;
     let water_material = water_materials.add(
         WaterMaterial {
             base: StandardMaterial {

@@ -22,5 +22,5 @@ pub mod prelude {
     // };
     pub use crate::terrain_planes::{PGSerializedMesh, LoadTerrainPlane, PlaneToEdit};
     pub use crate::water::depth::{Wakes, WakeHitter, render_to_depth};
-    pub use crate::water::{WaterPlugin, WaveUpdate, WaterChunk, WaterData, WaterMaterial, WaterMaterialExtension, water_bundle, water_mm};
+    pub use crate::water::{WaterPlugin, WaveUpdate, WaterChunk, WaterData, WaterMaterial, WaterMaterialExtension, spawn_water, water_mm};
 }
