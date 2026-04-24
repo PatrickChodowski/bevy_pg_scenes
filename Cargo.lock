@@ -1172,7 +1172,7 @@ dependencies = [
 [[package]]
 name = "bevy_pg_core"
 version = "1.18.0"
-source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#9af2b01762077db812961a72d62a3c8610c7db69"
+source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#7dc6a126b8b2b8766b9b70673a52d48f995fa03c"
 dependencies = [
  "bevy",
  "bevy_enhanced_input",
@@ -5879,7 +5879,7 @@ dependencies = [
  "ndk-sys 0.6.0+11769913",
  "objc",
  "once_cell",
- "ordered-float 4.6.0",
+ "ordered-float 5.1.0",
  "parking_lot",
  "portable-atomic",
  "portable-atomic-util",

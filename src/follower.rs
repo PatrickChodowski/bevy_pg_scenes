@@ -113,12 +113,13 @@ impl CurrentTile {
         for tile in self.visible.iter(){
             new_map_tiles.insert(*tile);
         }
-        for (_entity, terrain_chunk) in mapchunks.iter(){
-            old_map_tiles.insert(terrain_chunk.tile);
-            if !new_map_tiles.contains(&terrain_chunk.tile){
-                to_despawn.insert(terrain_chunk.tile);
-            }
-        }
+        // TODO
+        // for (_entity, terrain_chunk) in mapchunks.iter(){
+        //     old_map_tiles.insert(terrain_chunk.tile);
+        //     if !new_map_tiles.contains(&terrain_chunk.tile){
+        //         to_despawn.insert(terrain_chunk.tile);
+        //     }
+        // }
         self.to_spawn = new_map_tiles.difference(&old_map_tiles).cloned().collect::<HashSet<Tile>>();
         self.to_despawn = to_despawn;
 

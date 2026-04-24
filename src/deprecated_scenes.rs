@@ -2,13 +2,13 @@
 use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
-use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player, TerrainChunk, Tile};
+use bevy_pg_core::prelude::{GameStateTransition, GameState, AABB, Player, TerrainChunk, WaterChunk, Tile};
 use bevy_pg_nav::prelude::{PGNavmesh, GenerateNavMesh};
 use bevy::platform::collections::{HashMap, HashSet};
 
 use crate::plane_scenes::PGPlaneScenesPlugin;
 use crate::terrain_planes::PGScenesTerrainPlanesPlugin;
-use crate::water::{WaterChunk, WaterData, water_bundle};
+use crate::water::{WaterData, water_bundle};
 use crate::spawners_markers::{Marker, Spawner};
 
 #[derive(Resource)]

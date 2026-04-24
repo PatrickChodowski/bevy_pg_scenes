@@ -7,7 +7,7 @@ use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use libm::sinf;
-use bevy_pg_core::prelude::{GameState, Tile};
+use bevy_pg_core::prelude::{GameState, Tile, WaterChunk};
 
 // use crate::scenes::Chunk;
 
@@ -156,10 +156,4 @@ impl MaterialExtension for WaterMaterialExtension {
     fn deferred_fragment_shader() -> ShaderRef {
         "shaders/water.wgsl".into()
     }
-}
-
-#[derive(Component, Debug, Reflect)]
-
-pub struct WaterChunk{
-    pub dims: Vec2
 }
