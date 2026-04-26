@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::mesh::Mesh;
 use serde::{Serialize, Deserialize};
-use bevy_pg_core::prelude::GameState;
+use bevy_pg_core::prelude::{GameState, TerrainChunk};
 use bevy::mesh::SerializedMesh;
 use bevy::asset::LoadState;
 use bevy::math::Vec3;
@@ -115,6 +115,7 @@ fn track_pg_meshes(
                             commands.entity(entity).insert(PlaneToEdit::new(pgmesh.width, pgmesh.height, pgmesh.subdivisions));
                         }
                         commands.entity(entity).insert(Name::from(pgmesh.name.clone()));
+                        commands.entity(entity).insert(TerrainChunk{dims: Vec2::new(pgmesh.width, pgmesh.height)});
                         commands.entity(entity).remove::<UpdateMesh>();
                     }
                 }

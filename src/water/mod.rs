@@ -7,9 +7,10 @@ use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use libm::sinf;
-use bevy_pg_core::prelude::{GameState, Tile, WaterChunk};
+use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, WaterChunk};
 
 // use crate::scenes::Chunk;
+use crate::prelude::Static;
 
 pub mod depth;
 use crate::water::depth::WaterdepthPlugin;
@@ -23,12 +24,25 @@ impl Plugin for WaterPlugin {
         .add_plugins(MaterialPlugin::<WaterMaterial> {
             ..default()
         })
-        
         .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
         .add_plugins(WaterdepthPlugin)
+        .add_systems(PostUpdate, update_water_chunk_data.run_if(in_state(GameStatePlay::Editor)))
         ;
 
 
+    }
+}
+
+fn update_water_chunk_data(
+    mut query: Query<(&mut WaterChunk, &Transform), Changed<Transform>>
+){
+    for (mut chunk, transform) in query.iter_mut(){
+        if transform.scale.x != chunk.dims.x {
+            chunk.dims.x = transform.scale.x;
+        }
+        if transform.scale.z != chunk.dims.y {
+            chunk.dims.y = transform.scale.z;
+        }
     }
 }
 
@@ -57,6 +71,7 @@ pub fn spawn_water(
         NotShadowCaster,
         Pickable{should_block_lower: true, ..default()},
         DespawnOnExit(GameState::Play),
+        Static
     )).id();
 
     water_mm(water_entity, commands, meshes, materials, water_material, dims, for_editor);

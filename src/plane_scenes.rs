@@ -100,7 +100,7 @@ impl AssetSource {
     }
 }
 
-// All non moving/non spawnees entities: Buildings, Props
+// All non moving/non spawnees entities: Buildings, Props, Markers, Water
 #[derive(Component, Reflect)]
 pub struct Static;
 
@@ -150,7 +150,8 @@ impl SceneData {
                         AssignComponents,
                         DespawnOnExit(GameState::Play),
                         name.clone(),
-                        AssetSource::new_mm(asset_path.clone())
+                        AssetSource::new_mm(asset_path.clone()),
+                        Static
                     ));
                 }
             } else if name.contains("Spawner_") {
@@ -160,7 +161,8 @@ impl SceneData {
                             sod.transform(&scene_origin),
                             (scenes_settings.spawners_mapping)(name.to_string(), &sod.data),
                             DespawnOnExit(GameState::Play),
-                            name.clone()
+                            name.clone(),
+                            Static
                         )
                     );
                 }
@@ -171,7 +173,8 @@ impl SceneData {
                             sod.transform(&scene_origin),
                             (scenes_settings.markers_mapping)(name.to_string()),
                             DespawnOnExit(GameState::Play),
-                            name.clone()
+                            name.clone(),
+                            Static
                         )
                     );
                 }
