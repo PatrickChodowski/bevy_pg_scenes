@@ -37,11 +37,16 @@ fn update_water_chunk_data(
     mut query: Query<(&mut WaterChunk, &Transform), Changed<Transform>>
 ){
     for (mut chunk, transform) in query.iter_mut(){
-        if transform.scale.x != chunk.dims.x {
-            chunk.dims.x = transform.scale.x;
-        }
-        if transform.scale.z != chunk.dims.y {
-            chunk.dims.y = transform.scale.z;
+
+        if chunk.just_spawned {
+            chunk.just_spawned = false;
+        } else {
+            if transform.scale.x != chunk.dims.x {
+                chunk.dims.x = transform.scale.x;
+            }
+            if transform.scale.z != chunk.dims.y {
+                chunk.dims.y = transform.scale.z;
+            }
         }
     }
 }
@@ -66,7 +71,7 @@ pub fn spawn_water(
 ) -> Entity {
     let water_entity = commands.spawn((
         Transform::from_translation(*loc),
-        WaterChunk{dims: *dims},
+        WaterChunk{dims: *dims, just_spawned: true},
         Name::from("water"),
         NotShadowCaster,
         Pickable{should_block_lower: true, ..default()},
