@@ -7,7 +7,7 @@ use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use libm::sinf;
-use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, WaterChunk};
+use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, EditorAsset, WaterChunk};
 
 // use crate::scenes::Chunk;
 use crate::prelude::Static;
@@ -76,7 +76,8 @@ pub fn spawn_water(
         NotShadowCaster,
         Pickable{should_block_lower: true, ..default()},
         DespawnOnExit(GameState::Play),
-        Static
+        Static,
+        EditorAsset::Water
     )).id();
 
     water_mm(water_entity, commands, meshes, materials, water_material, dims, for_editor);

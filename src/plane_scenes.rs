@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::platform::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use bevy::asset::LoadState;
-use bevy_pg_core::prelude::GameState;
+use bevy_pg_core::prelude::{GameState, EditorAsset};
 use bevy_common_assets::json::JsonAssetPlugin;
 
 use crate::{spawners_markers::MSSettings, water::{WaterMaterial, WaterData, spawn_water}};
@@ -151,6 +151,7 @@ impl SceneData {
                         DespawnOnExit(GameState::Play),
                         name.clone(),
                         AssetSource::new_mm(asset_path.clone()),
+                        EditorAsset::Asset(name.to_string()),
                         Static
                     ));
                 }
@@ -161,6 +162,7 @@ impl SceneData {
                             sod.transform(&scene_origin),
                             (scenes_settings.spawners_mapping)(name.to_string(), &sod.data),
                             DespawnOnExit(GameState::Play),
+                            EditorAsset::Spawner(name.to_string()),
                             name.clone(),
                             Static
                         )
@@ -173,6 +175,7 @@ impl SceneData {
                             sod.transform(&scene_origin),
                             (scenes_settings.markers_mapping)(name.to_string()),
                             DespawnOnExit(GameState::Play),
+                            EditorAsset::Marker(name.to_string()),
                             name.clone(),
                             Static
                         )
