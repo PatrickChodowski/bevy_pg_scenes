@@ -152,6 +152,7 @@ impl SceneData {
                         name.clone(),
                         AssetSource::new_mm(asset_path.clone()),
                         EditorAsset::Asset(name.to_string()),
+                        Pickable{should_block_lower: true, ..default()},
                         Static
                     ));
                 }
@@ -164,6 +165,7 @@ impl SceneData {
                             DespawnOnExit(GameState::Play),
                             EditorAsset::Spawner(name.to_string()),
                             name.clone(),
+                            Pickable{should_block_lower: true, ..default()},
                             Static
                         )
                     );
@@ -177,6 +179,7 @@ impl SceneData {
                             DespawnOnExit(GameState::Play),
                             EditorAsset::Marker(name.to_string()),
                             name.clone(),
+                            Pickable{should_block_lower: true, ..default()},
                             Static
                         )
                     );
