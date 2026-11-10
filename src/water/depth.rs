@@ -1,15 +1,16 @@
 use std::f32::consts::FRAC_PI_2;
 
+
 use bevy::{
     asset::RenderAssetUsages, camera::RenderTarget, core_pipeline::{
-        core_3d::graph::{Core3d, Node3d},
+        Core3d,
         prepass::DepthPrepass,
     }, ecs::{query::QueryItem, system::lifetimeless::Read}, image::{ImageCompareFunction, ImageSampler, ImageSamplerDescriptor}, prelude::*, render::{
         RenderApp, camera::ExtractedCamera, extract_resource::{ExtractResource, ExtractResourcePlugin}, render_asset::RenderAssets, render_graph::{
             NodeRunError, RenderGraphContext, RenderGraphExt as _, RenderLabel, ViewNode,
             ViewNodeRunner,
         }, render_resource::{CommandEncoderDescriptor, Extent3d, Origin3d, TexelCopyTextureInfo, TextureAspect, TextureDimension, TextureFormat
-        }, renderer::RenderContext, texture::GpuImage, view::ViewDepthTexture
+        }, renderer::RenderContext, texture::GpuImage
     }
 };
 use bevy::camera::visibility::RenderLayers;

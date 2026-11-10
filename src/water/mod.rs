@@ -12,8 +12,8 @@ use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, EditorAsset, WaterCh
 // use crate::scenes::Chunk;
 use crate::prelude::Static;
 
-pub mod depth;
-use crate::water::depth::WaterdepthPlugin;
+// pub mod depth;
+// use crate::water::depth::WaterdepthPlugin;
 
 pub struct WaterPlugin;
 
@@ -25,8 +25,8 @@ impl Plugin for WaterPlugin {
             ..default()
         })
         .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
-        .add_plugins(WaterdepthPlugin)
-        .add_systems(PostUpdate, update_water_chunk_data.run_if(in_state(GameStatePlay::Editor)))
+        // .add_plugins(WaterdepthPlugin)
+        .add_systems(PostUpdate, update_water_chunk_data)
         ;
 
 

@@ -1,10 +1,10 @@
 [package]
 name = "bevy_pg_scenes"
-version = "1.18.0"
+version = "1.20.0"
 edition = "2024"
 
 [dependencies]
-bevy = {version="0.18", default-features = false, features = ["serialize"]}
+bevy = {version="0.20", default-features = false, features = ["serialize", "3d"]}
 libm = "0.2"
 log = { version = "0.4", features = [
     "max_level_debug",
@@ -12,11 +12,11 @@ log = { version = "0.4", features = [
 ] }
 serde = "1.0"
 
-bevy_pg_nav = {path="../bevy_pg_nav"}
+# bevy_pg_nav = {path="../bevy_pg_nav"}
 # bevy_pg_nav = {version = "1.18.0", git="https://www.github.com/PatrickChodowski/bevy_pg_nav"}
-bevy_common_assets = {version = "0.15.0", default-features = false, features = ["json"]}
-# bevy_pg_core = {version = "1.18.0", git="https://www.github.com/PatrickChodowski/bevy_pg_core"}
-bevy_pg_core = {path="../bevy_pg_core"}
+bevy_common_assets = {version = "0.18.0", default-features = false, features = ["json"]}
+bevy_pg_core = {version = "1.20.0", git="https://www.github.com/PatrickChodowski/bevy_pg_core"}
+# bevy_pg_core = {path="../bevy_pg_core"}
 
 
 

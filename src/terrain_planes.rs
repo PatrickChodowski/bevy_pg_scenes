@@ -7,7 +7,7 @@ use bevy::asset::LoadState;
 use bevy::math::Vec3;
 use bevy_common_assets::json::JsonAssetPlugin;
 
-use crate::water::depth::render_to_depth;
+// use crate::water::depth::render_to_depth;
 
 
 
@@ -63,7 +63,7 @@ fn spawn_terrain_plane(
         // MeshMaterial3d(terrain_scene_mat),
         MeshMaterial3d(materials.add(StandardMaterial::from(Color::WHITE))),
         DespawnOnExit(GameState::Play),
-        render_to_depth()
+        // render_to_depth()
     )).id();
 
     if for_editor {
@@ -112,7 +112,8 @@ fn track_pg_meshes(
 
 
                         if update_mesh.for_editor {
-                            commands.entity(entity).insert(PlaneToEdit::new(pgmesh.width, pgmesh.height, pgmesh.subdivisions));
+                            // TODO
+                            // commands.entity(entity).insert(PlaneToEdit::new(pgmesh.width, pgmesh.height, pgmesh.subdivisions));
                         }
                         commands.entity(entity).insert(Name::from(pgmesh.name.clone()));
                         commands.entity(entity).insert(TerrainChunk{dims: Vec2::new(pgmesh.width, pgmesh.height)});
@@ -159,37 +160,5 @@ fn msg_load_terrain_plane(
             &ass,
             msg.for_editor
         );
-    }
-}
-
-
-
-
-#[derive(Component)]
-pub struct PlaneToEdit{
-    pub width: f32,
-    pub height: f32,
-    pub subdivisions: u32,
-    pub changes: u32 
-}
-
-impl PlaneToEdit {
-    pub fn new(width: f32, height: f32, subdivisions: u32) -> Self {
-        PlaneToEdit {
-            width, height, subdivisions, changes: 0
-        }
-    }
-
-    pub fn dims(&self) -> Vec2 {
-        return Vec2::new(self.width, self.height);
-    }
-
-    pub fn calculate_optimal_vertex_radius(&self, percentage: f32) -> f32 {
-        let spacing_x = self.height / (self.subdivisions+1).max(1) as f32;
-        let spacing_y = self.width / (self.subdivisions+1).max(1) as f32;
-        let min_spacing = spacing_x.min(spacing_y);
-        let max_radius = min_spacing / 2.0;
-        let safe_fill = percentage.clamp(0.01, 0.99);
-        max_radius * safe_fill
     }
 }
