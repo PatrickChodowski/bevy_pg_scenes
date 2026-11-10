@@ -75,7 +75,7 @@ pub struct SceneData {
     pub objects:  HashMap<Name, Vec<SceneObjectData>>
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Copy, Component)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, Component, Default)]
 pub struct AssignComponents;
 
 #[derive(Reflect, Debug)]
@@ -101,7 +101,7 @@ impl AssetSource {
 }
 
 // All non moving/non spawnees entities: Buildings, Props, Markers, Water
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Default, Clone)]
 pub struct Static;
 
 
