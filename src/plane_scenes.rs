@@ -151,7 +151,7 @@ impl SceneData {
                         DespawnOnExit(GameState::Play),
                         name.clone(),
                         AssetSource::new_mm(asset_path.clone()),
-                        EditorAsset::Asset(name.to_string()),
+                        EditorAsset::Scene(name.to_string()),
                         Pickable{should_block_lower: true, ..default()},
                         Static
                     ));

@@ -282,7 +282,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -1386,7 +1386,7 @@ dependencies = [
 [[package]]
 name = "bevy_pg_core"
 version = "1.20.0"
-source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#871a33568148b916f77b3acc610263f29f5878b0"
+source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#022810e318bb48b4b92c714ca881bb1a5d840c03"
 dependencies = [
  "bevy",
  "libm",
@@ -4292,7 +4292,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.45.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
