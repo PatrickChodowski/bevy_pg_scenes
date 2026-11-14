@@ -36,7 +36,7 @@ impl Default for Spawner {
 
 
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Clone, Copy)]
 pub struct Marker {
     pub id: usize,
     pub processed: bool
