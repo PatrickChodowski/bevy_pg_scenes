@@ -36,9 +36,10 @@ impl Default for Spawner {
 
 
 
-#[derive(Component, Reflect, Clone, Copy)]
+#[derive(Component, Reflect, Clone)]
 pub struct Marker {
     pub id: usize,
+    pub data:   HashMap<String, String>, // contain any key value data that might be useful to pass from editor to game
     pub processed: bool
 }
 #[derive(Component, Reflect)]
@@ -46,12 +47,17 @@ pub struct Markee; // Result of Markers processing
 
 impl Marker {
     pub fn new(id: usize) -> Self {
-        Marker{id, processed: false}
+        Marker{id, processed: false, data: HashMap::new()}
     }
+    pub fn add(&mut self, k: String, v: String) -> Self {
+        self.data.insert(k, v);
+        self.clone()
+    }
+
 }
 
 impl Default for Marker {
     fn default() -> Self {
-        Marker { id: 0, processed: false}
+        Marker { id: 0, processed: false, data: HashMap::new()}
     }
 }
