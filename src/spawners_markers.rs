@@ -28,6 +28,13 @@ impl Spawner {
     }
 }
 
+impl Default for Spawner {
+    fn default() -> Self {
+        Spawner { id: 0, data: HashMap::new(), active: true}
+    }
+}
+
+
 
 #[derive(Component, Reflect)]
 pub struct Marker {
@@ -43,3 +50,8 @@ impl Marker {
     }
 }
 
+impl Default for Marker {
+    fn default() -> Self {
+        Marker { id: 0, processed: false}
+    }
+}
