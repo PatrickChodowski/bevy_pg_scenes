@@ -22,7 +22,7 @@ pub struct PGSerializedMesh {
 }
 
 impl PGSerializedMesh {
-    fn load(path: &str) -> std::io::Result<(Mesh, f32, f32, u32, String)> {
+    pub fn load(path: &str) -> std::io::Result<(Mesh, f32, f32, u32, String)> {
         let json = std::fs::read_to_string(path)?;
         let serialized: PGSerializedMesh = serde_json::from_str(&json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
