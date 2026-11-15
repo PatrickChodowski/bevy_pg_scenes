@@ -1386,7 +1386,7 @@ dependencies = [
 [[package]]
 name = "bevy_pg_core"
 version = "1.20.0"
-source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#022810e318bb48b4b92c714ca881bb1a5d840c03"
+source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#a1f739eb3cbf68e602e319309bed77fcab6a74ef"
 dependencies = [
  "bevy",
  "libm",

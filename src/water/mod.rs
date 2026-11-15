@@ -1,5 +1,5 @@
 
-use bevy::color::palettes::css::{WHITE, BLUE};
+use bevy::color::palettes::css::BLUE;
 use bevy::prelude::*;
 use bevy::pbr::{ExtendedMaterial, MaterialExtension};
 use bevy::reflect::Reflect;
@@ -7,10 +7,7 @@ use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
 use libm::sinf;
-use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, EditorAsset, WaterChunk};
-
-// use crate::scenes::Chunk;
-use crate::prelude::Static;
+use bevy_pg_core::prelude::{GameState, EditorAsset, WaterChunk};
 
 pub mod depth;
 use crate::water::depth::WaterdepthPlugin;
@@ -25,7 +22,7 @@ impl Plugin for WaterPlugin {
             ..default()
         })
         .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
-        // .add_plugins(WaterdepthPlugin)
+        .add_plugins(WaterdepthPlugin)
         .add_systems(PostUpdate, update_water_chunk_data)
         ;
 
@@ -59,58 +56,46 @@ pub struct WaterData{
 }
 
 
-
-pub fn spawn_water(
-    commands:          &mut Commands,
-    meshes:            &mut ResMut<Assets<Mesh>>,
-    materials:         &mut ResMut<Assets<StandardMaterial>>,
-    water_material:    Handle<WaterMaterial>,
+pub fn base_water_scene(
     loc:               &Vec3,
     dims:              &Vec2,
-    for_editor:        bool
-) -> Entity {
-    let water_entity = commands.spawn((
-        Transform::from_translation(*loc),
-        WaterChunk{dims: *dims, just_spawned: true},
-        Name::from("water"),
-        NotShadowCaster,
-        Pickable{should_block_lower: true, ..default()},
-        DespawnOnExit(GameState::Play),
-        Static,
-        EditorAsset::Water
-    )).id();
+) -> impl Scene {
+    
+    let transform = Transform::from_translation(*loc);
+    let asset = EditorAsset::Water;
 
-    water_mm(water_entity, commands, meshes, materials, water_material, dims, for_editor);
-
-    return water_entity;
-}
-
-pub fn water_mm(
-    water_entity:      Entity,
-    commands:          &mut Commands,
-    meshes:            &mut ResMut<Assets<Mesh>>,
-    materials:         &mut ResMut<Assets<StandardMaterial>>,
-    water_material:    Handle<WaterMaterial>,
-    dims: &Vec2,
-    for_editor: bool
-) {
-    if for_editor {
-        commands.entity(water_entity).insert(
-            (
-                Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
-                MeshMaterial3d(materials.add(StandardMaterial::from_color(Color::from(BLUE).with_alpha(1.0))))
-            )
-        );
-    } else {
-        commands.entity(water_entity).insert(
-            (
-                Mesh3d(meshes.add(Plane3d::default().mesh().size(dims.x, dims.y))),
-                MeshMaterial3d(water_material),
-            )
-        );
+    return bsn! {
+        WaterChunk{dims: {*dims}}
+        transform
+        Name::from("water")
+        NotShadowCaster
+        asset
     }
 }
 
+pub fn nice_water(
+    loc:              &Vec3,
+    dims:             &Vec2,
+    water_material:   Handle<WaterMaterial>,
+) -> impl Scene {
+    bsn! {
+        @base_water_scene(loc, dims)
+        MeshMaterial3d<WaterMaterial>(water_material)
+        Mesh3d(asset_value(Plane3d::default().mesh().size(dims.x, dims.y)))
+    }
+}
+
+pub fn simple_water(
+    loc:               &Vec3,
+    dims:              &Vec2
+) -> impl Scene {
+
+    bsn! {
+        @base_water_scene(loc, dims)
+        MeshMaterial3d::<StandardMaterial>(asset_value(Color::from(BLUE).with_alpha(1.0)))
+        Mesh3d(asset_value(Plane3d::default().mesh().size(dims.x, dims.y)))
+    }
+}
 
 #[derive(Resource)]
 pub struct WaveUpdate {
