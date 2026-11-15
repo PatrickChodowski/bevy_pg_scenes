@@ -11,14 +11,9 @@ log = { version = "0.4", features = [
     "release_max_level_warn",
 ] }
 serde = "1.0"
-
-# bevy_pg_nav = {path="../bevy_pg_nav"}
-# bevy_pg_nav = {version = "1.18.0", git="https://www.github.com/PatrickChodowski/bevy_pg_nav"}
 bevy_common_assets = {version = "0.18.0", default-features = false, features = ["json"]}
 bevy_pg_core = {version = "1.20.0", git="https://www.github.com/PatrickChodowski/bevy_pg_core"}
 serde_json = "1.0.154"
-# bevy_pg_core = {path="../bevy_pg_core"}
-
 
 
 [lints.clippy]
