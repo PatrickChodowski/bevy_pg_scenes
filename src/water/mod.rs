@@ -12,8 +12,8 @@ use bevy_pg_core::prelude::{GameState, GameStatePlay, Tile, EditorAsset, WaterCh
 // use crate::scenes::Chunk;
 use crate::prelude::Static;
 
-// pub mod depth;
-// use crate::water::depth::WaterdepthPlugin;
+pub mod depth;
+use crate::water::depth::WaterdepthPlugin;
 
 pub struct WaterPlugin;
 

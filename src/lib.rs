@@ -8,12 +8,8 @@ mod water;
 
 pub mod prelude {
     pub use crate::follower::CurrentTile;
-
     pub use crate::spawners_markers::{Markee, Marker, Spawnee, Spawner};
-    
-    pub use crate::plane_scenes::{AssetSource, AssetSourceType, 
-        AssignComponents, SceneData, SceneObjectData, LoadPlaneScene, Static
-    };
+    pub use crate::plane_scenes::{SceneData, SceneObjectData, LoadPlaneScene, Static};
     pub use crate::maps::LoadMap;
     pub use crate::scenes::{PGScenesPlugin, SetScene, SceneTransition, ScenesSet, LoadStartScene};
 
@@ -21,6 +17,6 @@ pub mod prelude {
     //     LoadStartScene, Static, SceneTransition, MapsData, SetScene, CurrentChunk, ScenesSet
     // };
     pub use crate::terrain_planes::{PGSerializedMesh, LoadTerrainPlane};
-    // pub use crate::water::depth::{Wakes, WakeHitter, render_to_depth};
+    pub use crate::water::depth::{Wakes, WakeHitter, render_to_depth};
     pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, spawn_water, water_mm};
 }
