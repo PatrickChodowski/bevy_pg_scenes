@@ -109,7 +109,7 @@ pub struct Static;
 impl SceneData {
 
     // Spawning scene from the scene file. All elements will be spawned from here 
-    fn spawn(
+    pub fn spawn(
         &self, 
         maybe_origin:    Option<Vec3>,
         commands:        &mut Commands, 
@@ -201,10 +201,11 @@ impl SceneData {
 
 #[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
 pub struct SceneObjectData {
-    pub location:   Vec3,
-    pub rotation:   Vec3,
-    pub scale:      Vec3,
-    pub data:       Option<HashMap<String,String>>  // Hold NPC Type etc.
+    pub editor_asset: EditorAsset,
+    pub location:     Vec3,
+    pub rotation:     Vec3,
+    pub scale:        Vec3,
+    pub data:         Option<HashMap<String,String>>  // Hold NPC Type etc.
 } 
 impl SceneObjectData {
     pub fn transform(&self, origin: &Vec3) -> Transform {
