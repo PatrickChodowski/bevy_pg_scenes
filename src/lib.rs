@@ -9,7 +9,7 @@ mod water;
 pub mod prelude {
     pub use crate::follower::CurrentTile;
     pub use crate::spawners_markers::{Markee, Marker, Spawnee, Spawner};
-    pub use crate::plane_scenes::{SceneData, SceneObjectData, LoadPlaneScene, Static};
+    pub use crate::plane_scenes::{SceneData, SceneObjectData, LoadPlaneScene, Static, AssetSource, AssetSourceType, AssignComponents};
     pub use crate::maps::LoadMap;
     pub use crate::scenes::{PGScenesPlugin, SetScene, SceneTransition, ScenesSet, LoadStartScene};
 
