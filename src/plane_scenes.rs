@@ -29,30 +29,30 @@ pub struct SceneData {
     pub objects:  HashMap<Name, Vec<SceneObjectData>>
 }
 
-// #[derive(Deserialize, Serialize, Debug, Clone, Copy, Component, Default)]
-// pub struct AssignComponents;
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, Component, Default)]
+pub struct AssignComponents;
 
-// #[derive(Reflect, Debug)]
-// pub enum AssetSourceType{
-//     MeshMaterial,
-//     Scene
-// }
+#[derive(Reflect, Debug)]
+pub enum AssetSourceType{
+    MeshMaterial,
+    Scene
+}
 
-// #[derive(Component, Reflect, Debug)]
-// #[reflect(Component)]
-// pub struct AssetSource {
-//     pub path: String,
-//     pub typ:  AssetSourceType
-// }
+#[derive(Component, Reflect, Debug)]
+#[reflect(Component)]
+pub struct AssetSource {
+    pub path: String,
+    pub typ:  AssetSourceType
+}
 
-// impl AssetSource {
-//     pub fn new_mm(path: String) -> Self {
-//         AssetSource{path, typ: AssetSourceType::MeshMaterial}
-//     }
-//     pub fn new_scene(path: String) -> Self {
-//         AssetSource{path, typ: AssetSourceType::Scene}
-//     }
-// }
+impl AssetSource {
+    pub fn new_mm(path: String) -> Self {
+        AssetSource{path, typ: AssetSourceType::MeshMaterial}
+    }
+    pub fn new_scene(path: String) -> Self {
+        AssetSource{path, typ: AssetSourceType::Scene}
+    }
+}
 
 // All non moving/non spawnees entities: Buildings, Props, Markers, Water
 #[derive(Component, Reflect, Default, Clone)]
