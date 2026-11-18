@@ -9,18 +9,18 @@ use crate::terrain_planes::PGScenesTerrainPlanesPlugin;
 use crate::spawners_markers::{MSSettings, Marker, Spawner};
 
 pub struct PGScenesPlugin {
-    pub map_resolution: u8,
-    pub markers_mapping: fn(name: String) -> Marker,
-    pub spawners_mapping: fn(name: String, maybe_data: &Option<HashMap<String, String>>) -> Spawner
+    pub map_resolution: u8
+    // pub markers_mapping: fn(name: String) -> Marker,
+    // pub spawners_mapping: fn(name: String, maybe_data: &Option<HashMap<String, String>>) -> Spawner
 }
 
 impl Plugin for PGScenesPlugin {
     fn build(&self, app: &mut App) {
         app
-        .insert_resource(MSSettings{
-            spawners_mapping: self.spawners_mapping,
-            markers_mapping: self.markers_mapping
-        })
+        // .insert_resource(MSSettings{
+        //     spawners_mapping: self.spawners_mapping,
+        //     markers_mapping: self.markers_mapping
+        // })
         .insert_resource(MapSettings::new(self.map_resolution))
         .add_plugins(PGMapsPlugin)
         .add_plugins(PGPlaneScenesPlugin)
