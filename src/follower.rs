@@ -2,7 +2,8 @@ use bevy::prelude::*;
 use bevy::platform::collections::HashSet;
 use bevy_pg_core::prelude::{Player, Tile, TerrainChunk};
 
-use crate::{maps::{SceneMap, MapSettings}, prelude::ScenesSet};
+use crate::types::PGMap;
+use crate::plugin::{ScenesSet, MapSettings};
 
 
 
@@ -24,7 +25,7 @@ impl Plugin for PGSceneFollowerPlugin {
 
 fn locate(
     player_transform:   Single<&Transform, (With<Player>, Changed<Transform>)>,
-    scene_map:          Res<SceneMap>,
+    scene_map:          Res<PGMap>,
     // terrain_chunks:     Query<(Entity, &TerrainChunk)>,
     mut current_tile:   ResMut<CurrentTile>,
     map_settings:       Res<MapSettings>
