@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 use bevy_common_assets::json::JsonAssetPlugin;
-use bevy_pg_core::prelude::{GameState, AABB};
+use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
 use crate::follower::PGSceneFollowerPlugin;
-use crate::types::{PGMap, PGSerializedMesh, SceneData};
+use crate::types::{PGMap, PGSerializedMesh, SceneData, CurrentChunk};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
 use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes, track_maps};
 
@@ -26,12 +26,17 @@ impl Plugin for PGScenesPlugin {
         .add_systems(Update, 
             (
                 msg_load_map.run_if(on_message::<LoadMap>),
+                msg_load_terrain_plane.run_if(on_message::<LoadMap>),
                 track_maps.run_if(any_with_component::<TrackLoadingMap>),
                 track_meshes.run_if(any_with_component::<UpdateMesh>),
                 update_map_aabbs.run_if(resource_added::<PGMap>)
 
             )
         )
+
+        .add_systems(OnEnter(GameStateTransition::UnloadScene),   unload_scene)
+        .add_systems(OnEnter(GameStateTransition::LoadSceneData), load_scene_data)
+
         .add_observer(on_load_map)
         .add_observer(on_load_terrain_plane)
 
@@ -100,7 +105,40 @@ pub enum SetScene  {
 }
 
 
+fn unload_scene(
+    mut current_chunk:  ResMut<CurrentChunk>,
+    mut next_gst:       ResMut<NextState<GameStateTransition>>
+){
+    // Clear all the resources
+    info!(" [SCENES] Transition: Unload Scene");
+    current_chunk.reset();
+    next_gst.set(GameStateTransition::LoadSceneData)
+}
 
+
+fn load_scene_data(
+    mut commands:   Commands,
+    ass:            Res<AssetServer>,
+    transition:     Res<SceneTransition>
+) {
+
+    info!(" [SCENES] Transition Loading new scene {:?}", transition.set_scene);
+    match transition.set_scene {
+        SetScene::Start => {
+            commands.insert_resource(
+                LoadStartScene{player_ready: false}
+            );
+        }
+        SetScene::Save(ref save_name) => {
+            // commands.insert_resource(
+            //     LoadSaveResources {
+            //         loaded_entities: false,
+            //         loaded_resources: false,
+            //         handle_save_entities:  ass.load(format!("saves/{}.scn.ron", save_name))
+            // });
+        }
+    }
+}
 
 
 // Observers and systems

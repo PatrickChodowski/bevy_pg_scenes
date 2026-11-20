@@ -665,6 +665,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_camera_controller"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d7e5d5c0b4f65ff3c8be38fde3d371747d30ef9fa571d382acde9fb8ccacf0a"
+dependencies = [
+ "bevy_app",
+ "bevy_camera",
+ "bevy_color",
+ "bevy_curve",
+ "bevy_derive",
+ "bevy_ecs",
+ "bevy_image",
+ "bevy_input",
+ "bevy_log",
+ "bevy_math",
+ "bevy_picking",
+ "bevy_platform",
+ "bevy_render",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_window",
+]
+
+[[package]]
 name = "bevy_clipboard"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1147,6 +1171,7 @@ dependencies = [
  "bevy_app",
  "bevy_asset",
  "bevy_camera",
+ "bevy_camera_controller",
  "bevy_clipboard",
  "bevy_color",
  "bevy_core_pipeline",
@@ -1386,7 +1411,7 @@ dependencies = [
 [[package]]
 name = "bevy_pg_core"
 version = "1.20.0"
-source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#a1f739eb3cbf68e602e319309bed77fcab6a74ef"
+source = "git+https://www.github.com/PatrickChodowski/bevy_pg_core#356b1b0d13d46cc697535d16aa156cd7f316ae53"
 dependencies = [
  "bevy",
  "libm",

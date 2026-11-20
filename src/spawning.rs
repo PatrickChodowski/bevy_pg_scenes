@@ -80,7 +80,7 @@ pub (crate) fn track_meshes(
                         }
 
                         commands.entity(entity).insert(Name::from(pgmesh.name.clone()));
-                        commands.entity(entity).insert(TerrainChunk{dims: Vec2::new(pgmesh.width, pgmesh.height)});
+                        commands.entity(entity).insert(TerrainChunk::new(Vec2::new(pgmesh.width, pgmesh.height)));
                         commands.entity(entity).remove::<UpdateMesh>();
                     }
                 }
