@@ -3,10 +3,10 @@ use bevy_common_assets::json::JsonAssetPlugin;
 use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
 use crate::prelude::WaterData;
-use crate::follower::{CurrentTile, PGSceneFollowerPlugin};
+use crate::follower::{PGSceneFollowerPlugin};
 use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData, MapsData};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
-use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes};
+use crate::spawning::{spawn_terrain_plane, spawn_from_map};
 use crate::water::WaterPlugin;
 use crate::load_assets::collect_map_data;
 
@@ -30,15 +30,9 @@ impl Plugin for PGScenesPlugin {
             )
         )
         .add_systems(Update, 
-            // (
-        //         msg_load_map.run_if(on_message::<LoadMap>),
-        //         msg_load_terrain_plane.run_if(on_message::<LoadMap>),
-        //         // track_maps.run_if(any_with_component::<TrackLoadingMap>),
-        //         track_meshes.run_if(any_with_component::<UpdateMesh>),
                 (
                     update_map_aabbs
                 ).run_if(resource_added::<GameMap>)
-            // )
         )
         .add_systems(
             Update,
@@ -65,7 +59,6 @@ fn transition_load_static(
     mut commands:           Commands,
     ass:                    Res<AssetServer>,
     mut meshes:             ResMut<Assets<Mesh>>,
-    current_tile:           Res<CurrentTile>,
     mapdata:                Res<GameMap>,
     // mapchunks:              Query<(Entity, &TerrainChunk)>,
     // scenechunks:            Query<(Entity, &SceneChunk)>,
@@ -75,7 +68,7 @@ fn transition_load_static(
 ){
     info!("[SCENES] [LOAD_STATIC]");
 
-    info!("CurrentTile: {:?}", current_tile);
+    // info!("CurrentTile: {:?}", current_tile);
 
     // for (entity, terrainchunk) in mapchunks.iter(){
     //     if current_tile.to_despawn.contains(&terrainchunk.tile){
@@ -223,12 +216,10 @@ pub enum SetScene  {
 
 
 fn transition_unload_scene(
-    mut current_tile:  ResMut<CurrentTile>,
     mut next_gst:      ResMut<NextState<GameStateTransition>>
 ){
     // Clear all the resources
     info!(" [SCENES] Transition: Unload Scene");
-    current_tile.reset();
     next_gst.set(GameStateTransition::LoadSceneData)
 }
 

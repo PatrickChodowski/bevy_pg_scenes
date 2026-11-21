@@ -9,7 +9,6 @@ pub mod load_assets;
 
 
 pub mod prelude {
-    pub use crate::follower::CurrentTile;
     pub use crate::types::{SceneData, SceneObjectData, Static, AssetSource, AssetSourceType, AssignComponents, PGSerializedMesh, 
         Markee, Marker, Spawnee, Spawner, MapMeta, MapsData, MapChunk, GameMap, GameMapEntry
     };
