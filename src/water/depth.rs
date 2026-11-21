@@ -37,7 +37,7 @@ impl Plugin for WaterdepthPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ExtractResourcePlugin::<WakeDepthTextures>::default())
             .init_resource::<WakeDepthTextures>()
-            .add_systems(OnEnter(GameState::Play), setup_water_depth)
+            // .add_systems(Startup, setup_water_depth)
             .add_systems(Update, spawn_wakes.run_if(in_state(GameState::Play)));
 
         let render_app = app

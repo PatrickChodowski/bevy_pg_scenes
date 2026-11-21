@@ -32,9 +32,16 @@ fn locate(
 ){
 
     for entry in game_map.data.iter(){
+
+        info!("{:?}", entry);
+
+        // CurrentTile: Res(CurrentTile { tile: Tile { x: 0, y: 0 }, visible: [Tile { x: 0, y: 0 }], to_spawn: {}, to_despawn: {}, visited: {}, name: "test" })
+        // GameMapEntry { loc: Vec3(0.0, 0.0, 0.0), tiles_count: 2, tiles_size: 25.0, name: "pat2", aabb: AABB { min_x: -12.5, max_x: 12.5, min_z: -12.5, max_z: 12.5 } }
         if !entry.aabb.has_point(player_transform.translation.xz()){
             continue;
         }
+
+        info!("Map {} has point", entry.name);
 
         // if &current_tile.tile == tile {
         //     continue;
@@ -52,7 +59,7 @@ fn locate(
 
 
 
-#[derive(Resource, Reflect, Clone)]
+#[derive(Resource, Reflect, Clone, Debug)]
 #[reflect(Resource)]
 pub struct CurrentTile {
     pub tile:               Tile,

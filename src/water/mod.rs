@@ -21,7 +21,7 @@ impl Plugin for WaterPlugin {
         .add_plugins(MaterialPlugin::<WaterMaterial> {
             ..default()
         })
-        .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
+        // .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
         .add_plugins(WaterdepthPlugin)
         .add_systems(PostUpdate, update_water_chunk_data)
         ;

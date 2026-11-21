@@ -20,6 +20,33 @@ impl LoadSaveResources {
 }
 
 
+#[derive(Serialize, Deserialize, Clone, Debug, bevy::asset::Asset, bevy::reflect::TypePath)]
+pub struct MapChunk {
+    pub name: String,
+    pub terrain_file: String,
+    pub scene_file: String,
+    pub location: [f32; 3],
+    pub local_x_index: u32,
+    pub local_y_index: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, bevy::asset::Asset, bevy::reflect::TypePath)]
+pub struct MapMeta {
+    pub name: String,
+    pub chunks_count_x: u32,
+    pub chunks_count_y: u32,
+    pub chunk_width: f32,
+    pub chunk_height: f32,
+    pub chunks: Vec<MapChunk>,
+}
+
+#[derive(Resource)]
+pub struct MapsData {
+    pub data: Vec<MapMeta>
+}
+
+
+
 // Contains Scene names with positions
 // GameMap holds information in what position what map/scene should load
 //

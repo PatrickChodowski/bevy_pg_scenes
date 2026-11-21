@@ -4,7 +4,7 @@ use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
 use crate::prelude::WaterData;
 use crate::follower::{CurrentTile, PGSceneFollowerPlugin};
-use crate::types::{GameMap, PGSerializedMesh, SceneData};
+use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
 use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes};
 use crate::water::WaterPlugin;
@@ -17,30 +17,31 @@ impl Plugin for PGScenesPlugin {
         .add_message::<LoadMap>()
         .add_message::<LoadScene>()
         .add_message::<LoadTerrain>()
-        .insert_resource(MapSettings{render_tiles: 1})
+        .insert_resource(MapSettings{render_tiles: 3})
         .add_plugins(
             (
                 PGSceneFollowerPlugin, 
                 JsonAssetPlugin::<GameMap>::new(&["map.json"]),
+                JsonAssetPlugin::<MapMeta>::new(&["meta.json"]),
                 JsonAssetPlugin::<SceneData>::new(&["scene.json"]),
                 JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]),
                 WaterPlugin
             )
         )
         .add_systems(Update, 
-            (
+            // (
         //         msg_load_map.run_if(on_message::<LoadMap>),
         //         msg_load_terrain_plane.run_if(on_message::<LoadMap>),
         //         // track_maps.run_if(any_with_component::<TrackLoadingMap>),
         //         track_meshes.run_if(any_with_component::<UpdateMesh>),
                 update_map_aabbs.run_if(resource_added::<GameMap>)
-            )
+            // )
         )
 
-        .add_systems(OnEnter(GameStateTransition::UnloadScene),   unload_scene)
-        .add_systems(OnEnter(GameStateTransition::LoadSceneData), load_scene_data)
-        .add_systems(OnEnter(GameStateTransition::LoadStatic), load_static)
-        .add_systems(OnEnter(GameStateTransition::LoadRest), rest_loaded)
+        .add_systems(OnEnter(GameStateTransition::UnloadScene),   transition_unload_scene)
+        .add_systems(OnEnter(GameStateTransition::LoadSceneData), transition_load_scene_data)
+        .add_systems(OnEnter(GameStateTransition::LoadStatic), transition_load_static)
+        .add_systems(OnEnter(GameStateTransition::LoadRest), transition_load_rest)
         .add_systems(Update, close_transition.run_if(in_state(GameStateTransition::Ready)))
         .add_systems(OnEnter(GameStateTransition::Done),  switch_state)
         .add_observer(on_load_map)
@@ -51,7 +52,7 @@ impl Plugin for PGScenesPlugin {
 }
 
 
-fn load_static(
+fn transition_load_static(
     mut commands:           Commands,
     ass:                    Res<AssetServer>,
     mut meshes:             ResMut<Assets<Mesh>>,
@@ -61,9 +62,12 @@ fn load_static(
     // scenechunks:            Query<(Entity, &SceneChunk)>,
     // waterchunks:            Query<(Entity, &WaterChunk)>,
     mut next_gst:           ResMut<NextState<GameStateTransition>>,
-    water_data:             Res<WaterData>
+    // water_data:             Res<WaterData>
 ){
     info!("[SCENES] [LOAD_STATIC]");
+
+    info!("CurrentTile: {:?}", current_tile);
+
     // for (entity, terrainchunk) in mapchunks.iter(){
     //     if current_tile.to_despawn.contains(&terrainchunk.tile){
     //         info!("[Terrain] Despawning terrain {}: {}", terrainchunk.map_name, terrainchunk.chunk_id);
@@ -118,7 +122,7 @@ fn load_static(
 
 }
 
-fn rest_loaded(
+fn transition_load_rest(
     mut next_gst: ResMut<NextState<GameStateTransition>>,
 ){
     next_gst.set(GameStateTransition::Ready);
@@ -150,7 +154,7 @@ fn switch_state(
 
 #[derive(Resource)]
 pub struct MapSettings {
-    pub render_tiles: u8
+    pub render_tiles: u8 // How many tiles to render around the player's tile
 }
 
 
@@ -164,11 +168,11 @@ pub enum ScenesSet {
 }
 
 #[derive(Resource)]
-pub struct LoadStartScene {
+pub struct LoadPlayerScene {
     pub player_ready: bool
 }
 
-impl LoadStartScene {
+impl LoadPlayerScene {
     pub fn ready(&self) -> bool {
         self.player_ready
     }
@@ -209,9 +213,9 @@ pub enum SetScene  {
 }
 
 
-fn unload_scene(
+fn transition_unload_scene(
     mut current_tile:  ResMut<CurrentTile>,
-    mut next_gst:       ResMut<NextState<GameStateTransition>>
+    mut next_gst:      ResMut<NextState<GameStateTransition>>
 ){
     // Clear all the resources
     info!(" [SCENES] Transition: Unload Scene");
@@ -220,7 +224,7 @@ fn unload_scene(
 }
 
 
-fn load_scene_data(
+fn transition_load_scene_data(
     mut commands:   Commands,
     ass:            Res<AssetServer>,
     transition:     Res<SceneTransition>
@@ -230,7 +234,7 @@ fn load_scene_data(
     match transition.set_scene {
         SetScene::Start => {
             commands.insert_resource(
-                LoadStartScene{player_ready: false}
+                LoadPlayerScene{player_ready: false}
             );
         }
         SetScene::Save(ref save_name) => {
