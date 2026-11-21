@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::platform::collections::HashSet;
 use bevy_pg_core::prelude::{Player, Tile, TerrainChunk};
 
-use crate::types::PGMap;
+use crate::types::GameMap;
 use crate::plugin::{ScenesSet, MapSettings};
 
 
@@ -22,29 +22,29 @@ impl Plugin for PGSceneFollowerPlugin {
 }
 
 
-
+// TODO
 fn locate(
     player_transform:   Single<&Transform, (With<Player>, Changed<Transform>)>,
-    scene_map:          Res<PGMap>,
-    // terrain_chunks:     Query<(Entity, &TerrainChunk)>,
+    game_map:           Res<GameMap>,
+    terrain_chunks:     Query<(Entity, &TerrainChunk)>,
     mut current_tile:   ResMut<CurrentTile>,
     map_settings:       Res<MapSettings>
 ){
 
-    for (tile, entry) in scene_map.data.iter(){
+    for entry in game_map.data.iter(){
         if !entry.aabb.has_point(player_transform.translation.xz()){
             continue;
         }
 
-        if &current_tile.tile == tile {
-            continue;
-        }
+        // if &current_tile.tile == tile {
+        //     continue;
+        // }
 
-        info!(" [LOCATE] Player should be on tile: {}", entry.name);
-        current_tile.name = entry.name.clone();
-        current_tile.tile = *tile;
-        current_tile.get_visible(map_settings.render_tiles, scene_map.tiles_side);
-        // current_chunk.reset_tiles(&terrain_chunks);
+        // info!(" [LOCATE] Player should be on tile: {}", entry.name);
+        // current_tile.name = entry.name.clone();
+        // current_tile.tile = *tile;
+        // current_tile.get_visible(map_settings.render_tiles, game_map.tiles_side);
+        // current_tile.reset_tiles(&terrain_chunks);
 
         break;
     }

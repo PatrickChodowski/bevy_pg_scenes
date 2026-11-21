@@ -2,10 +2,12 @@ use bevy::prelude::*;
 use bevy_common_assets::json::JsonAssetPlugin;
 use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
-use crate::follower::PGSceneFollowerPlugin;
-use crate::types::{PGMap, PGSerializedMesh, SceneData, CurrentChunk};
+use crate::prelude::WaterData;
+use crate::follower::{CurrentTile, PGSceneFollowerPlugin};
+use crate::types::{GameMap, PGSerializedMesh, SceneData};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
-use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes, track_maps};
+use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes};
+use crate::water::WaterPlugin;
 
 pub struct PGScenesPlugin;
 
@@ -15,34 +17,136 @@ impl Plugin for PGScenesPlugin {
         .add_message::<LoadMap>()
         .add_message::<LoadScene>()
         .add_message::<LoadTerrain>()
+        .insert_resource(MapSettings{render_tiles: 1})
         .add_plugins(
             (
                 PGSceneFollowerPlugin, 
-                JsonAssetPlugin::<PGMap>::new(&["map.json"]),
+                JsonAssetPlugin::<GameMap>::new(&["map.json"]),
                 JsonAssetPlugin::<SceneData>::new(&["scene.json"]),
-                JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"])
+                JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]),
+                WaterPlugin
             )
         )
         .add_systems(Update, 
             (
-                msg_load_map.run_if(on_message::<LoadMap>),
-                msg_load_terrain_plane.run_if(on_message::<LoadMap>),
-                track_maps.run_if(any_with_component::<TrackLoadingMap>),
-                track_meshes.run_if(any_with_component::<UpdateMesh>),
-                update_map_aabbs.run_if(resource_added::<PGMap>)
-
+        //         msg_load_map.run_if(on_message::<LoadMap>),
+        //         msg_load_terrain_plane.run_if(on_message::<LoadMap>),
+        //         // track_maps.run_if(any_with_component::<TrackLoadingMap>),
+        //         track_meshes.run_if(any_with_component::<UpdateMesh>),
+                update_map_aabbs.run_if(resource_added::<GameMap>)
             )
         )
 
         .add_systems(OnEnter(GameStateTransition::UnloadScene),   unload_scene)
         .add_systems(OnEnter(GameStateTransition::LoadSceneData), load_scene_data)
-
+        .add_systems(OnEnter(GameStateTransition::LoadStatic), load_static)
+        .add_systems(OnEnter(GameStateTransition::LoadRest), rest_loaded)
+        .add_systems(Update, close_transition.run_if(in_state(GameStateTransition::Ready)))
+        .add_systems(OnEnter(GameStateTransition::Done),  switch_state)
         .add_observer(on_load_map)
         .add_observer(on_load_terrain_plane)
 
         ;
     }
 }
+
+
+fn load_static(
+    mut commands:           Commands,
+    ass:                    Res<AssetServer>,
+    mut meshes:             ResMut<Assets<Mesh>>,
+    current_tile:           Res<CurrentTile>,
+    mapdata:                Res<GameMap>,
+    // mapchunks:              Query<(Entity, &TerrainChunk)>,
+    // scenechunks:            Query<(Entity, &SceneChunk)>,
+    // waterchunks:            Query<(Entity, &WaterChunk)>,
+    mut next_gst:           ResMut<NextState<GameStateTransition>>,
+    water_data:             Res<WaterData>
+){
+    info!("[SCENES] [LOAD_STATIC]");
+    // for (entity, terrainchunk) in mapchunks.iter(){
+    //     if current_tile.to_despawn.contains(&terrainchunk.tile){
+    //         info!("[Terrain] Despawning terrain {}: {}", terrainchunk.map_name, terrainchunk.chunk_id);
+    //         commands.entity(entity).despawn();
+    //     }
+    // }
+    // for (entity, scenechunk) in scenechunks.iter(){
+    //     if current_tile.to_despawn.contains(&scenechunk.tile){
+    //         info!("[Terrain] Despawning scene element");
+    //         commands.entity(entity).despawn();
+    //     }
+    // }
+    // for (entity, waterchunk) in waterchunks.iter(){
+    //     if current_tile.to_despawn.contains(&waterchunk.tile){
+    //         info!("[Terrain] Despawning water chunk");
+    //         commands.entity(entity).despawn();
+    //     }
+    // }
+
+    // for tile in current_tile.to_spawn.iter(){
+    //     let Some(chunk) = mapdata.data.get(tile) else {continue;};
+    //     let sd = scenes.data.get(&chunk.chunk_id).unwrap();
+    //     // spawn_terrain_chunk(&mut commands, &ass, &chunk.map_name, tile, chunk, mapdata.chunk_size);
+    //     let mut bundles = Vec::with_capacity(sd.objects.len());
+    //     for (name, sods) in sd.objects.iter(){
+
+    //         let asset_path = format!("objects/{}.glb", name);
+    //         let mesh: Mesh3d = Mesh3d(ass.load(
+    //             GltfAssetLabel::Primitive{primitive:0, mesh:0}.from_asset(asset_path.clone()),
+    //         ));
+    //         let material: MeshMaterial3d::<StandardMaterial> = MeshMaterial3d(ass.load(
+    //             GltfAssetLabel::Material { index: 0, is_scale_inverted: false}.from_asset(asset_path)
+    //         ));
+
+    //         for sod in sods.iter(){
+    //             bundles.push((
+    //                 mesh.clone(), 
+    //                 material.clone(),
+    //                 sod.transform(), 
+    //                 SceneChunk{tile: *tile}, 
+    //                 name.clone(),
+    //                 AssignComponents,
+    //                 DespawnOnExit(GameState::Play)
+    //             ));
+    //         }
+    //     }
+    //     commands.spawn_batch(bundles);
+    //     // commands.spawn(water_bundle(&mut meshes, &tile, &chunk, water_data.material.clone(), mapdata.chunk_size));
+        
+    // }
+    next_gst.set(GameStateTransition::LoadRest);
+
+}
+
+fn rest_loaded(
+    mut next_gst: ResMut<NextState<GameStateTransition>>,
+){
+    next_gst.set(GameStateTransition::Ready);
+}
+
+
+
+fn close_transition(
+    mut next_gst:       ResMut<NextState<GameStateTransition>>,
+    mut transition:     ResMut<SceneTransition>,
+    time:               Res<Time>
+) {
+    transition.timer.tick(time.delta());
+    if transition.timer.is_finished() {
+        next_gst.set(GameStateTransition::Done);
+    }
+}
+
+fn switch_state(
+    mut commands:    Commands,
+    mut next_gs:     ResMut<NextState<GameState>>,
+    transition:      Res<SceneTransition>
+){
+    info!(" [SCENES] Closing transition, setting game state to {:?}", transition.next_state);
+    next_gs.set(transition.next_state);
+    commands.remove_resource::<SceneTransition>();
+}
+
 
 #[derive(Resource)]
 pub struct MapSettings {
@@ -106,12 +210,12 @@ pub enum SetScene  {
 
 
 fn unload_scene(
-    mut current_chunk:  ResMut<CurrentChunk>,
+    mut current_tile:  ResMut<CurrentTile>,
     mut next_gst:       ResMut<NextState<GameStateTransition>>
 ){
     // Clear all the resources
     info!(" [SCENES] Transition: Unload Scene");
-    current_chunk.reset();
+    current_tile.reset();
     next_gst.set(GameStateTransition::LoadSceneData)
 }
 
@@ -180,10 +284,10 @@ fn msg_load_terrain_plane(
 
 
 fn update_map_aabbs(
-     mut scenemap: ResMut<PGMap>
+     mut game_map: ResMut<GameMap>
 ){  
-    let dims = Vec2::splat(scenemap.tile_dim);
-    for (_tile, entry) in scenemap.data.iter_mut(){
+    for entry in game_map.data.iter_mut(){
+        let dims = Vec2::splat(entry.tiles_size);
         entry.aabb = AABB::from_loc_dims(entry.loc.xz(), dims);
     }
 }
