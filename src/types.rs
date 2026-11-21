@@ -19,6 +19,9 @@ impl LoadSaveResources {
     }
 }
 
+#[derive(Component, Default, Clone)]
+pub struct StreamingFocus;
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, bevy::asset::Asset, bevy::reflect::TypePath)]
 pub struct MapChunk {
@@ -40,12 +43,10 @@ pub struct MapMeta {
     pub chunks: Vec<MapChunk>,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct MapsData {
-    pub data: Vec<MapMeta>
+    pub data: HashMap<String, MapMeta>
 }
-
-
 
 // Contains Scene names with positions
 // GameMap holds information in what position what map/scene should load

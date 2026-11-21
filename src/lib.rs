@@ -5,6 +5,7 @@ pub mod spawning;
 pub mod plugin;
 pub mod events;
 pub mod types;
+pub mod load_assets;
 
 
 pub mod prelude {

@@ -4,10 +4,11 @@ use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
 use crate::prelude::WaterData;
 use crate::follower::{CurrentTile, PGSceneFollowerPlugin};
-use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData};
+use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData, MapsData};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
 use crate::spawning::{spawn_terrain_plane, spawn_from_map, TrackLoadingMap, UpdateMesh, track_meshes};
 use crate::water::WaterPlugin;
+use crate::load_assets::collect_map_data;
 
 pub struct PGScenesPlugin;
 
@@ -34,8 +35,16 @@ impl Plugin for PGScenesPlugin {
         //         msg_load_terrain_plane.run_if(on_message::<LoadMap>),
         //         // track_maps.run_if(any_with_component::<TrackLoadingMap>),
         //         track_meshes.run_if(any_with_component::<UpdateMesh>),
-                update_map_aabbs.run_if(resource_added::<GameMap>)
+                (
+                    update_map_aabbs
+                ).run_if(resource_added::<GameMap>)
             // )
+        )
+        .add_systems(
+            Update,
+            collect_map_data.run_if(
+                resource_exists::<GameMap>.and_then(not(resource_exists::<MapsData>)),
+            ),
         )
 
         .add_systems(OnEnter(GameStateTransition::UnloadScene),   transition_unload_scene)
