@@ -57,7 +57,7 @@ struct NavmeshPending(Handle<PGNavmesh>);
 pub struct LoadedNavmeshes(HashMap<String, Entity>);
 
 fn navmesh_path(map: &str) -> String {
-    format!("game_map/{map}/{map}_terrain.nav.json")
+    format!("game_map/{map}/navmesh/{map}_terrain.nav.json")
 }
 
 fn sync_navmeshes(
