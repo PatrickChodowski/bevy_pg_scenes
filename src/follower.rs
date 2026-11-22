@@ -11,10 +11,108 @@ use bevy::{asset::LoadState, time::common_conditions::on_timer};
 use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use crate::prelude::SceneData;
 use crate::types::StreamingFocus;
+use bevy_pg_nav::prelude::PGNavmesh;
+
+
+pub struct PGSceneFollowerPlugin;
+
+impl Plugin for PGSceneFollowerPlugin {
+    fn build(&self, app: &mut App) {
+        app
+        .init_asset_loader::<SerializedMeshLoader>()
+        .init_resource::<LoadedNavmeshes>()
+        .init_resource::<DesiredChunks>()
+        .init_resource::<LoadedChunks>()
+        .insert_resource(ChunkStreaming { load_radius: 60.0, unload_radius: 80.0 })
+        .add_systems(Startup, setup_chunk_material)
+        .add_systems(
+            Update,
+            (
+                (
+                    locate_chunks.run_if(on_timer(Duration::from_millis(250))),
+                    sync_navmeshes,
+                    redraw_chunks.run_if(resource_changed::<DesiredChunks>),
+                )
+                    .chain(),
+                spawn_chunk_objects,
+                attach_navmeshes,
+            )
+                .run_if(resource_exists::<MapsData>),
+        );
+        ;
+    }
+}
 
 
 
 // Follows player entity and manages spawning and despawning chunks
+#[derive(Component, Clone, Default)]
+pub struct MapNavmesh(pub String);
+
+
+#[derive(Component)]
+struct NavmeshPending(Handle<PGNavmesh>);
+
+#[derive(Resource, Default)]
+pub struct LoadedNavmeshes(HashMap<String, Entity>);
+
+fn navmesh_path(map: &str) -> String {
+    format!("game_map/{map}/{map}_terrain.nav.json")
+}
+
+fn sync_navmeshes(
+    mut commands: Commands,
+    desired: Res<DesiredChunks>,
+    mut loaded: ResMut<LoadedNavmeshes>,
+    ass: Res<AssetServer>,
+) {
+    let active: HashSet<String> = desired.0.iter().map(|id| id.map.clone()).collect();
+
+    loaded.0.retain(|map, entity| {
+        if active.contains(map) {
+            true
+        } else {
+            commands.entity(*entity).despawn();
+            false
+        }
+    });
+
+    for map in active {
+        if loaded.0.contains_key(&map) {
+            continue;
+        }
+        let handle: Handle<PGNavmesh> = ass.load(navmesh_path(&map));
+        let entity = commands
+            .spawn((
+                Name::new(format!("Navmesh {map}")),
+                MapNavmesh(map.clone()),
+                NavmeshPending(handle),
+            ))
+            .id();
+        loaded.0.insert(map, entity);
+    }
+}
+
+/// Every frame: moves a finished navmesh from the asset into the entity.
+fn attach_navmeshes(
+    mut commands: Commands,
+    ass: Res<AssetServer>,
+    navmeshes: Res<Assets<PGNavmesh>>,
+    pending: Query<(Entity, &MapNavmesh, &NavmeshPending)>,
+) {
+    for (entity, map, pending) in &pending {
+        if let Some(navmesh) = navmeshes.get(&pending.0) {
+            info!("Navmesh for '{}' loaded", map.0);
+            commands
+                .entity(entity)
+                .insert(navmesh.clone())
+                .remove::<NavmeshPending>();
+        } else if matches!(ass.load_state(&pending.0), LoadState::Failed(_)) {
+            warn!("Navmesh for '{}' failed to load", map.0);
+            commands.entity(entity).remove::<NavmeshPending>();
+        }
+    }
+}
 
 
 #[derive(Resource)]
@@ -78,31 +176,6 @@ impl AssetLoader for SerializedMeshLoader {
 
     fn extensions(&self) -> &[&str] {
         &["mesh.json"]
-    }
-}
-pub struct PGSceneFollowerPlugin;
-
-impl Plugin for PGSceneFollowerPlugin {
-    fn build(&self, app: &mut App) {
-        app
-        .init_asset_loader::<SerializedMeshLoader>()
-        .init_resource::<DesiredChunks>()
-        .init_resource::<LoadedChunks>()
-        .insert_resource(ChunkStreaming { load_radius: 60.0, unload_radius: 80.0 })
-        .add_systems(Startup, setup_chunk_material)
-        .add_systems(
-            Update,
-            (
-                (
-                    locate_chunks.run_if(on_timer(Duration::from_millis(250))),
-                    redraw_chunks.run_if(resource_changed::<DesiredChunks>),
-                )
-                    .chain(),
-                spawn_chunk_objects,
-            )
-                .run_if(resource_exists::<MapsData>),
-        );
-        ;
     }
 }
 
