@@ -11,7 +11,7 @@ use bevy::{asset::LoadState, time::common_conditions::on_timer};
 use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use crate::prelude::SceneData;
 use crate::types::StreamingFocus;
-use bevy_pg_nav::prelude::PGNavmesh;
+use bevy_pg_nav::prelude::{PGNavmesh, PGNavmeshType};
 use crate::terrain::{TerrainLayers, TerrainMaterial, new_splat_image, splat_loader_settings, terrain_material};
 
 
@@ -52,13 +52,25 @@ pub struct MapNavmesh(pub String);
 
 
 #[derive(Component)]
-struct NavmeshPending(Handle<PGNavmesh>);
+struct NavmeshPending {
+    handle: Handle<PGNavmesh>,
+    kind: PGNavmeshType,
+}
 
+/// The navmesh entities of the maps near the focus: terrain (people) and water (boats) per map.
 #[derive(Resource, Default)]
-pub struct LoadedNavmeshes(HashMap<String, Entity>);
+pub struct LoadedNavmeshes(HashMap<(String, PGNavmeshType), Entity>);
 
-fn navmesh_path(map: &str) -> String {
-    format!("game_map/{map}/navmesh/{map}_terrain.nav.json")
+/// Navmesh kinds loaded for every map. A map without water simply has no water file.
+const NAVMESH_KINDS: [PGNavmeshType; 2] = [PGNavmeshType::Terrain, PGNavmeshType::Water];
+
+/// Where PGNavmesh::filename saves them, as asset paths.
+fn navmesh_path(map: &str, kind: PGNavmeshType) -> String {
+    let suffix = match kind {
+        PGNavmeshType::Terrain => "terrain",
+        PGNavmeshType::Water => "water",
+    };
+    format!("game_map/{map}/navmesh/{map}_{suffix}.nav.json")
 }
 
 fn sync_navmeshes(
@@ -69,7 +81,7 @@ fn sync_navmeshes(
 ) {
     let active: HashSet<String> = desired.0.iter().map(|id| id.map.clone()).collect();
 
-    loaded.0.retain(|map, entity| {
+    loaded.0.retain(|(map, _), entity| {
         if active.contains(map) {
             true
         } else {
@@ -79,18 +91,21 @@ fn sync_navmeshes(
     });
 
     for map in active {
-        if loaded.0.contains_key(&map) {
-            continue;
+        for kind in NAVMESH_KINDS {
+            let key = (map.clone(), kind);
+            if loaded.0.contains_key(&key) {
+                continue;
+            }
+            let handle: Handle<PGNavmesh> = ass.load(navmesh_path(&map, kind));
+            let entity = commands
+                .spawn((
+                    Name::new(format!("Navmesh {map} ({kind:?})")),
+                    MapNavmesh(map.clone()),
+                    NavmeshPending { handle, kind },
+                ))
+                .id();
+            loaded.0.insert(key, entity);
         }
-        let handle: Handle<PGNavmesh> = ass.load(navmesh_path(&map));
-        let entity = commands
-            .spawn((
-                Name::new(format!("Navmesh {map}")),
-                MapNavmesh(map.clone()),
-                NavmeshPending(handle),
-            ))
-            .id();
-        loaded.0.insert(map, entity);
     }
 }
 
@@ -102,14 +117,19 @@ fn attach_navmeshes(
     pending: Query<(Entity, &MapNavmesh, &NavmeshPending)>,
 ) {
     for (entity, map, pending) in &pending {
-        if let Some(navmesh) = navmeshes.get(&pending.0) {
-            info!("Navmesh for '{}' loaded", map.0);
+        if let Some(navmesh) = navmeshes.get(&pending.handle) {
+            info!("{:?} navmesh for '{}' loaded", pending.kind, map.0);
+            // Inserting PGNavmesh makes bevy_pg_nav tag it NavmeshTerrain / NavmeshWater.
             commands
                 .entity(entity)
                 .insert(navmesh.clone())
                 .remove::<NavmeshPending>();
-        } else if matches!(ass.load_state(&pending.0), LoadState::Failed(_)) {
-            warn!("Navmesh for '{}' failed to load", map.0);
+        } else if matches!(ass.load_state(&pending.handle), LoadState::Failed(_)) {
+            match pending.kind {
+                PGNavmeshType::Terrain => warn!("Terrain navmesh for '{}' failed to load", map.0),
+                // Maps without water have no water navmesh: not a problem.
+                PGNavmeshType::Water => info!("No water navmesh for '{}'", map.0),
+            }
             commands.entity(entity).remove::<NavmeshPending>();
         }
     }
