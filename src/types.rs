@@ -48,6 +48,15 @@ pub struct MapMeta {
     /// Weights of layers 4..7 (second splat texture). None = none of those layers is painted.
     #[serde(default)]
     pub splat_file_2: Option<String>,
+    /// World position of the plane the map was exported from. Chunk `location`s and scene objects
+    /// are relative to it, so several maps (e.g. heightmap tiles) can sit side by side.
+    /// Navmeshes are already in world space. Missing in older exports = the origin.
+    #[serde(default)]
+    pub origin: [f32; 3],
+    /// Terrain as one heightmap; chunk meshes are built from it at load time. None = older
+    /// export with one mesh file per chunk (`MapChunk::terrain_file`).
+    #[serde(default)]
+    pub heightmap: Option<crate::terrain::heightmap::MapHeightmap>,
 }
 
 #[derive(Resource, Default)]
@@ -76,6 +85,9 @@ pub struct GameMapEntry {
 }
 
 
+/// DEPRECATED: the old whole-plane `{name}.mesh.json` export. Maps are exported as heightmaps
+/// now (`MapMeta::heightmap`); this only remains so the editor can open old exports to
+/// re-export them.
 #[derive(Debug, Clone, Serialize, Deserialize, bevy::asset::Asset, bevy::reflect::TypePath)]
 pub struct PGSerializedMesh {
     pub saved_loc:  Vec3,

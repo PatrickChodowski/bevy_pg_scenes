@@ -13,6 +13,9 @@ use crate::prelude::SceneData;
 use crate::types::StreamingFocus;
 use bevy_pg_nav::prelude::{PGNavmesh, PGNavmeshType};
 use crate::terrain::{TerrainLayers, TerrainMaterial, new_splat_image, splat_loader_settings, terrain_material};
+use crate::terrain::heightmap::{chunk_mesh, decode_colors, decode_heights};
+use bevy::asset::RenderAssetUsages;
+use bevy::image::ImageLoaderSettings;
 
 
 pub struct PGSceneFollowerPlugin;
@@ -36,6 +39,7 @@ impl Plugin for PGSceneFollowerPlugin {
                 )
                     .chain(),
                 spawn_chunk_objects,
+                build_heightmap_chunks,
                 attach_navmeshes,
             )
                 .run_if(resource_exists::<MapsData>),
@@ -254,10 +258,11 @@ fn locate_chunks(
 
     for (map_name, meta) in &maps.data {
         let size = Vec2::new(meta.chunk_width, meta.chunk_height);
+        let origin = Vec2::new(meta.origin[0], meta.origin[2]);
 
         for chunk in &meta.chunks {
             let id = ChunkId { map: map_name.clone(), chunk: chunk.name.clone() };
-            let distance = distance_to_rect(pos, chunk_min_xz(chunk, size), size);
+            let distance = distance_to_rect(pos, origin + chunk_min_xz(chunk, size), size);
 
             // Hysteresis: loaded chunks use the larger radius.
             let limit = if loaded.0.contains_key(&id) {
@@ -327,26 +332,89 @@ fn spawn_chunk(
     // ASSUMPTION: chunk files live next to the meta file: game_map/{map}/{file}.
     let base = format!("game_map/{}", meta.name);
     let scene: Handle<SceneData> = ass.load(format!("{base}/scenes/{}", chunk.scene_file));
-    // Needs a Mesh loader for the terrain_file extension, the same one your LoadPlane uses.
-    let mesh: Handle<Mesh> = ass.load(format!("{base}/terrain/{}", chunk.terrain_file));
 
-    // ASSUMPTION: vertices and object locations are in world space, so the root is at the origin.
-    // If they are relative to the chunk, use Transform::from_translation(Vec3::from(chunk.location)).
-    commands
-        .spawn((
-            Name::new(format!("Chunk {}", chunk.name)),
-            Chunk(id.clone()),
-            ChunkPending(scene),
-            Transform::IDENTITY,
-            Visibility::default(),
-        ))
-        .with_child((
-            ChunkTerrain,
-            Mesh3d(mesh),
-            MeshMaterial3d(material),
-            Transform::from_translation(Vec3::from(chunk.location)),
-        ))
-        .id()
+    // The root sits at the map's origin; the terrain and objects are placed relative to it
+    // (chunk.location and the scene's saved_loc are plane-local).
+    let mut root = commands.spawn((
+        Name::new(format!("Chunk {}", chunk.name)),
+        Chunk(id.clone()),
+        ChunkPending(scene),
+        Transform::from_translation(Vec3::from(meta.origin)),
+        Visibility::default(),
+    ));
+    let terrain = (ChunkTerrain, MeshMaterial3d(material), Transform::from_translation(Vec3::from(chunk.location)));
+    match &meta.heightmap {
+        // The mesh is built from the map's heightmap once it's loaded (build_heightmap_chunks).
+        Some(hm) => {
+            // CPU-side only: the heights become a mesh, the image itself is never drawn.
+            let cpu_only = |s: &mut ImageLoaderSettings| {
+                s.is_srgb = false;
+                s.asset_usage = RenderAssetUsages::MAIN_WORLD;
+            };
+            let heights = ass.load_builder().with_settings(cpu_only).load(format!("{base}/terrain/{}", hm.file));
+            let colors = hm.colors_file.as_ref().map(|f| ass.load_builder().with_settings(cpu_only).load(format!("{base}/terrain/{f}")));
+            root.with_child((
+                terrain,
+                ChunkHeightmapPending { map: meta.name.clone(), heights, colors, x: chunk.local_x_index, z: chunk.local_y_index },
+            ));
+        }
+        None => {
+            // DEPRECATED older export: one mesh file per chunk (SerializedMeshLoader). Kept so
+            // those maps still load until they're re-exported.
+            let mesh: Handle<Mesh> = ass.load(format!("{base}/terrain/{}", chunk.terrain_file));
+            root.with_child((terrain, Mesh3d(mesh)));
+        }
+    }
+    root.id()
+}
+
+/// On a chunk's terrain until its mesh is built from the map's heightmap.
+#[derive(Component)]
+struct ChunkHeightmapPending {
+    map: String,
+    heights: Handle<Image>,
+    colors: Option<Handle<Image>>,
+    x: u32,
+    z: u32,
+}
+
+fn build_heightmap_chunks(
+    mut commands: Commands,
+    ass: Res<AssetServer>,
+    maps: Res<MapsData>,
+    images: Res<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    pending: Query<(Entity, &ChunkHeightmapPending, &Transform)>,
+) {
+    for (entity, pending, transform) in &pending {
+        let Some(hm) = maps.data.get(&pending.map).and_then(|m| m.heightmap.as_ref()) else {
+            commands.entity(entity).remove::<ChunkHeightmapPending>();
+            continue;
+        };
+        let failed = |h: &Handle<Image>| matches!(ass.load_state(h), LoadState::Failed(_));
+        if failed(&pending.heights) {
+            warn!("Heightmap of map '{}' failed to load", pending.map);
+            commands.entity(entity).remove::<ChunkHeightmapPending>();
+            continue;
+        }
+        let Some(image) = images.get(&pending.heights) else { continue }; // still loading
+        let colors = match &pending.colors {
+            Some(handle) if failed(handle) => None, // fall back to white
+            Some(handle) => match images.get(handle) {
+                Some(image) => decode_colors(image, hm),
+                None => continue, // still loading
+            },
+            None => None,
+        };
+        let Some(heights) = decode_heights(image, hm) else {
+            warn!("Heightmap of map '{}' has an unexpected format or size", pending.map);
+            commands.entity(entity).remove::<ChunkHeightmapPending>();
+            continue;
+        };
+        // Vertices relative to the chunk terrain's own position (its `location`).
+        let mesh = chunk_mesh(hm, &heights, colors.as_deref(), pending.x, pending.z, transform.translation);
+        commands.entity(entity).insert(Mesh3d(meshes.add(mesh))).remove::<ChunkHeightmapPending>();
+    }
 }
 
 // ───────────────────────── objects ─────────────────────────

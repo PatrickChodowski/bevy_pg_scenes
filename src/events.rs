@@ -7,12 +7,6 @@ pub struct LoadScene {
 }
 
 #[derive(Event, Message)]
-pub struct LoadTerrain {
-    pub mesh_path: String,
-    pub maybe_loc: Option<Vec3>
-}
-
-#[derive(Event, Message)]
 pub struct LoadMap {
     pub map_path: String,
     pub maybe_loc: Option<Vec3>,

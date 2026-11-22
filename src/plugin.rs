@@ -4,9 +4,9 @@ use bevy_pg_core::prelude::{GameState, GameStateTransition,AABB};
 
 use crate::prelude::WaterData;
 use crate::follower::{PGSceneFollowerPlugin};
-use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData, MapsData};
-use crate::events::{LoadMap, LoadScene, LoadTerrain};
-use crate::spawning::{spawn_terrain_plane, spawn_from_map};
+use crate::types::{GameMap, MapMeta, SceneData, MapsData};
+use crate::events::{LoadMap, LoadScene};
+use crate::spawning::spawn_from_map;
 use crate::water::WaterPlugin;
 use crate::terrain::TerrainMaterialPlugin;
 use crate::load_assets::collect_map_data;
@@ -18,7 +18,6 @@ impl Plugin for PGScenesPlugin {
         app
         .add_message::<LoadMap>()
         .add_message::<LoadScene>()
-        .add_message::<LoadTerrain>()
         .insert_resource(MapSettings{render_tiles: 3})
         .add_plugins(
             (
@@ -26,7 +25,6 @@ impl Plugin for PGScenesPlugin {
                 JsonAssetPlugin::<GameMap>::new(&["map.json"]),
                 JsonAssetPlugin::<MapMeta>::new(&["meta.json"]),
                 JsonAssetPlugin::<SceneData>::new(&["scene.json"]),
-                JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]),
                 WaterPlugin,
                 TerrainMaterialPlugin::default(),
             )
@@ -50,7 +48,6 @@ impl Plugin for PGScenesPlugin {
         .add_systems(Update, close_transition.run_if(in_state(GameStateTransition::Ready)))
         .add_systems(OnEnter(GameStateTransition::Done),  switch_state)
         .add_observer(on_load_map)
-        .add_observer(on_load_terrain_plane)
 
         ;
     }
@@ -252,41 +249,6 @@ fn transition_load_scene_data(
 
 
 // Observers and systems
-
-
-fn on_load_terrain_plane(
-    trigger: On<LoadTerrain>,
-    mut commands: Commands,
-    ass:    Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-){
-    info!("On Load Terrain Plane");
-    spawn_terrain_plane(
-        trigger.mesh_path.clone(), 
-        trigger.maybe_loc, 
-        &mut commands,
-        &mut materials,
-        &ass
-    );
-}
-
-
-fn msg_load_terrain_plane(
-    mut msgs: MessageReader<LoadTerrain>,
-    mut commands: Commands,
-    ass:    Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-){
-    for msg in msgs.read(){
-        spawn_terrain_plane(
-            msg.mesh_path.clone(), 
-            msg.maybe_loc, 
-            &mut commands,
-            &mut materials,
-            &ass
-        );
-    }
-}
 
 
 fn update_map_aabbs(

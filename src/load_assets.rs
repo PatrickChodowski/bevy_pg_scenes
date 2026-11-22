@@ -51,6 +51,12 @@ pub(crate) fn collect_map_data(
     for (name, handle) in tracker.handles.drain(..) {
         match metas.get(&handle) {
             Some(meta) => {
+                if meta.heightmap.is_none() {
+                    warn!(
+                        "Map '{name}' uses the deprecated per-chunk mesh files; open it in the editor \
+                         and export it again to convert it to a heightmap"
+                    );
+                }
                 maps_data.data.insert(name, meta.clone());
             }
             None => warn!("Map meta for '{name}' failed to load"),

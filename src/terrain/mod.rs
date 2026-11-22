@@ -35,6 +35,7 @@ use bevy_common_assets::json::JsonAssetPlugin;
 use serde::{Deserialize, Serialize};
 
 mod noise;
+pub mod heightmap;
 pub use noise::NoisePattern;
 use noise::generate_layer;
 
@@ -264,6 +265,7 @@ impl Default for TerrainLayersConfig {
                 layer("Rock", [0.45, 0.45, 0.47], 0.75, 6.0, 0.45, 1.6, NoisePattern::Ridged),
                 layer("Sand", [0.76, 0.70, 0.50], 0.9, 8.0, 0.12, 0.2, NoisePattern::Speckled),
                 road,
+                layer("Snow", [0.92, 0.94, 0.97], 0.6, 7.0, 0.08, 0.15, NoisePattern::Smooth),
             ],
         }
     }
@@ -642,7 +644,8 @@ mod tests {
         assert_eq!(cfg.layers.len(), TERRAIN_LAYERS);
 
         let cfg = TerrainLayersConfig::default();
-        assert_eq!(cfg.layers.len(), 5);
+        assert_eq!(cfg.layers.len(), 6);
+        assert_eq!(cfg.layers[5].name, "Snow");
         assert_eq!(cfg.layer(7).name, "", "unused slots are blank fillers");
         let params = cfg.params();
         assert_eq!(params.tile_size[1].x, 4.0, "layer 4 (road) is in the second Vec4");
