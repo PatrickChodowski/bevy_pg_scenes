@@ -41,6 +41,13 @@ pub struct MapMeta {
     pub chunk_width: f32,
     pub chunk_height: f32,
     pub chunks: Vec<MapChunk>,
+    /// Terrain texture weights for the whole map (next to the chunk meshes in terrain/).
+    /// None = unpainted. Chunk meshes keep the full plane's UVs, so they all sample this one image.
+    #[serde(default)]
+    pub splat_file: Option<String>,
+    /// Weights of layers 4..7 (second splat texture). None = none of those layers is painted.
+    #[serde(default)]
+    pub splat_file_2: Option<String>,
 }
 
 #[derive(Resource, Default)]

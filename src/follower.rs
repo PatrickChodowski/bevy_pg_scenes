@@ -12,6 +12,7 @@ use bevy::asset::{io::Reader, AssetLoader, LoadContext};
 use crate::prelude::SceneData;
 use crate::types::StreamingFocus;
 use bevy_pg_nav::prelude::PGNavmesh;
+use crate::terrain::{TerrainLayers, TerrainMaterial, new_splat_image, splat_loader_settings, terrain_material};
 
 
 pub struct PGSceneFollowerPlugin;
@@ -24,7 +25,7 @@ impl Plugin for PGSceneFollowerPlugin {
         .init_resource::<DesiredChunks>()
         .init_resource::<LoadedChunks>()
         .insert_resource(ChunkStreaming { load_radius: 60.0, unload_radius: 80.0 })
-        .add_systems(Startup, setup_chunk_material)
+        .init_resource::<ChunkMaterials>()
         .add_systems(
             Update,
             (
@@ -150,8 +151,9 @@ pub struct ChunkObject;
 #[derive(Component)]
 struct ChunkPending(Handle<SceneData>);
 
-#[derive(Resource)]
-struct ChunkMaterial(Handle<StandardMaterial>);
+/// One terrain material per map (they differ by splat texture).
+#[derive(Resource, Default)]
+struct ChunkMaterials(HashMap<String, Handle<TerrainMaterial>>);
 
 #[derive(Default, TypePath)]
 pub struct SerializedMeshLoader;
@@ -180,14 +182,31 @@ impl AssetLoader for SerializedMeshLoader {
 }
 
 
-fn setup_chunk_material(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
-    // Vertex colors from the terrain mesh are picked up automatically by StandardMaterial.
-    let handle = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 1.0,
-        ..default()
-    });
-    commands.insert_resource(ChunkMaterial(handle));
+/// The map's terrain material: its splat texture if it has one, else unpainted (which looks like
+/// the old plain white material tinted by vertex colours).
+fn map_material(
+    meta: &MapMeta,
+    cache: &mut ChunkMaterials,
+    ass: &AssetServer,
+    layers: &TerrainLayers,
+    images: &mut Assets<Image>,
+    materials: &mut Assets<TerrainMaterial>,
+) -> Handle<TerrainMaterial> {
+    cache
+        .0
+        .entry(meta.name.clone())
+        .or_insert_with(|| {
+            let mut load = |file: &Option<String>| match file {
+                Some(file) => ass
+                    .load_builder()
+                    .with_settings(splat_loader_settings)
+                    .load(format!("game_map/{}/terrain/{file}", meta.name)),
+                None => images.add(new_splat_image(1, 1)),
+            };
+            let splats = [load(&meta.splat_file), load(&meta.splat_file_2)];
+            materials.add(terrain_material(layers, splats))
+        })
+        .clone()
 }
 
 // ───────────────────────── locate ─────────────────────────
@@ -247,7 +266,10 @@ fn redraw_chunks(
     mut loaded: ResMut<LoadedChunks>,
     maps: Res<MapsData>,
     ass: Res<AssetServer>,
-    material: Res<ChunkMaterial>,
+    layers: Res<TerrainLayers>,
+    mut cache: ResMut<ChunkMaterials>,
+    mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<TerrainMaterial>>,
 ) {
     // Despawn chunks that are no longer wanted. Despawn is recursive and drops the handles,
     // so the mesh and scene assets unload with them.
@@ -268,7 +290,8 @@ fn redraw_chunks(
         let Some(meta) = maps.data.get(&id.map) else { continue };
         let Some(chunk) = meta.chunks.iter().find(|c| c.name == id.chunk) else { continue };
 
-        let root = spawn_chunk(&mut commands, &ass, &material, meta, chunk, id);
+        let material = map_material(meta, &mut cache, &ass, &layers, &mut images, &mut materials);
+        let root = spawn_chunk(&mut commands, &ass, material, meta, chunk, id);
         loaded.0.insert(id.clone(), root);
     }
 }
@@ -276,7 +299,7 @@ fn redraw_chunks(
 fn spawn_chunk(
     commands: &mut Commands,
     ass: &AssetServer,
-    material: &ChunkMaterial,
+    material: Handle<TerrainMaterial>,
     meta: &MapMeta,
     chunk: &MapChunk,
     id: &ChunkId,
@@ -300,7 +323,7 @@ fn spawn_chunk(
         .with_child((
             ChunkTerrain,
             Mesh3d(mesh),
-            MeshMaterial3d(material.0.clone()),
+            MeshMaterial3d(material),
             Transform::from_translation(Vec3::from(chunk.location)),
         ))
         .id()

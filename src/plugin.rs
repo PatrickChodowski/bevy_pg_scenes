@@ -8,6 +8,7 @@ use crate::types::{GameMap, MapMeta, PGSerializedMesh, SceneData, MapsData};
 use crate::events::{LoadMap, LoadScene, LoadTerrain};
 use crate::spawning::{spawn_terrain_plane, spawn_from_map};
 use crate::water::WaterPlugin;
+use crate::terrain::TerrainMaterialPlugin;
 use crate::load_assets::collect_map_data;
 
 pub struct PGScenesPlugin;
@@ -26,7 +27,8 @@ impl Plugin for PGScenesPlugin {
                 JsonAssetPlugin::<MapMeta>::new(&["meta.json"]),
                 JsonAssetPlugin::<SceneData>::new(&["scene.json"]),
                 JsonAssetPlugin::<PGSerializedMesh>::new(&["mesh.json"]),
-                WaterPlugin
+                WaterPlugin,
+                TerrainMaterialPlugin::default(),
             )
         )
         .add_systems(Update, 

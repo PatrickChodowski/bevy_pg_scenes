@@ -1,5 +1,6 @@
 pub mod follower;
 mod water;
+pub mod terrain;
 
 pub mod spawning;
 pub mod plugin;
@@ -15,5 +16,10 @@ pub mod prelude {
     pub use crate::events::{LoadMap, LoadTerrain, LoadScene};
     pub use crate::plugin::{PGScenesPlugin, ScenesSet, LoadPlayerScene, SceneTransition, SetScene, MapSettings};
     pub use crate::water::depth::{Wakes, WakeHitter, render_to_depth};
+    pub use crate::terrain::{
+        TerrainMaterialPlugin, TerrainMaterial, TerrainLayersExtension, TerrainLayers, TerrainLayersConfig,
+        TerrainLayerConfig, TerrainParams, TERRAIN_LAYERS, SPLAT_TEXTURES, terrain_material, terrain_base_material,
+        new_splat_image, splat_sampler, splat_loader_settings, rgba8_pixels, NoisePattern,
+    };
     pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, nice_water, simple_water};
 }
