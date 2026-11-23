@@ -296,6 +296,9 @@ pub fn setup_water_depth(
             scale: Vec2::ONE,
             water_height: water_height_depth,
             depth_texture: Some(wake_depth_textures.main_depth.clone()),
+            wakes: crate::water::WakeUniform::default(),
+            open_sea: None,
+            sea: crate::water::SeaUniform::default(),
         },
     });
     commands.insert_resource(WaterData {

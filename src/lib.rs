@@ -1,5 +1,6 @@
 pub mod follower;
 mod water;
+pub mod weather;
 pub mod terrain;
 
 pub mod spawning;
@@ -24,5 +25,8 @@ pub mod prelude {
     pub use crate::terrain::heightmap::{
         MapHeightmap, grid_normal, encode_heights, decode_heights, decode_colors, chunk_mesh,
     };
-    pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, nice_water, simple_water};
+    pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, nice_water, simple_water, water_plane, SeaUniform};
+    pub use crate::water::open_sea::{OpenSeaField, WATER_LEVEL};
+    pub use crate::water::waves::Sea;
+    pub use crate::weather::{WeatherPlugin, Wind, WindDriver};
 }

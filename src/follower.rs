@@ -352,7 +352,9 @@ fn spawn_chunk(
         Chunk(id.clone()),
         ChunkPending(scene),
         Transform::from_translation(Vec3::from(meta.origin)),
-        Visibility::default(),
+        // Hidden until its objects (the water) are in: the terrain is usually ready first, and
+        // for a few frames the sea floor would show as dry sand.
+        Visibility::Hidden,
     ));
     let terrain = (ChunkTerrain, MeshMaterial3d(material), Transform::from_translation(Vec3::from(chunk.location)));
     match &meta.heightmap {
@@ -431,7 +433,7 @@ fn build_heightmap_chunks(
 
 // ───────────────────────── objects ─────────────────────────
 
-/// Mesh and fallback material shared by all water planes (a 1 x 1 plane scaled to its size).
+/// Mesh and fallback material shared by all water planes (a subdivided 1 x 1 plane scaled to its size).
 #[derive(Default)]
 struct WaterAssets(Option<(Handle<Mesh>, Handle<StandardMaterial>)>);
 
@@ -449,7 +451,8 @@ fn spawn_chunk_objects(
         .0
         .get_or_insert_with(|| {
             (
-                meshes.add(Plane3d::default().mesh().size(1.0, 1.0)),
+                // Subdivided for the waves: 32 quads a side, ~1.5 units apart on a 50 x 50 chunk.
+                meshes.add(Plane3d::default().mesh().size(1.0, 1.0).subdivisions(crate::water::WATER_CHUNK_QUADS - 1).build()),
                 materials.add(StandardMaterial {
                     base_color: Color::srgba(0.1, 0.35, 0.55, 0.8),
                     alpha_mode: AlphaMode::Blend,
@@ -463,7 +466,7 @@ fn spawn_chunk_objects(
         let Some(scene) = scenes.get(&pending.0) else {
             if matches!(ass.load_state(&pending.0), LoadState::Failed(_)) {
                 warn!("Chunk scene failed to load for {root}");
-                commands.entity(root).remove::<ChunkPending>();
+                commands.entity(root).remove::<ChunkPending>().insert(Visibility::Inherited);
             }
             continue; // still loading
         };
@@ -524,6 +527,7 @@ fn spawn_chunk_objects(
                     }
                 }
             })
-            .remove::<ChunkPending>();
+            .remove::<ChunkPending>()
+            .insert(Visibility::Inherited);
     }
 }

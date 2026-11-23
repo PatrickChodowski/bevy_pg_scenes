@@ -26,6 +26,7 @@ impl Plugin for PGScenesPlugin {
                 JsonAssetPlugin::<MapMeta>::new(&["meta.json"]),
                 JsonAssetPlugin::<SceneData>::new(&["scene.json"]),
                 WaterPlugin,
+                crate::weather::WeatherPlugin,
                 TerrainMaterialPlugin::default(),
             )
         )
