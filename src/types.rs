@@ -57,6 +57,10 @@ pub struct MapMeta {
     /// export with one mesh file per chunk (`MapChunk::terrain_file`).
     #[serde(default)]
     pub heightmap: Option<crate::terrain::heightmap::MapHeightmap>,
+    /// Navmesh kinds this map has files for ("terrain", "water"), kept up to date by the editor.
+    /// None = older export: the game tries every kind.
+    #[serde(default)]
+    pub navmeshes: Option<Vec<String>>,
 }
 
 #[derive(Resource, Default)]

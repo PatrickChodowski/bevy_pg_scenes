@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::platform::collections::HashSet;
-use bevy_pg_core::prelude::EditorAsset;
+use bevy_pg_core::prelude::{EditorAsset, WaterChunk};
+use bevy::light::NotShadowCaster;
 use std::{
     collections::{HashMap},
     time::Duration,
@@ -68,13 +69,17 @@ pub struct LoadedNavmeshes(HashMap<(String, PGNavmeshType), Entity>);
 /// Navmesh kinds loaded for every map. A map without water simply has no water file.
 const NAVMESH_KINDS: [PGNavmeshType; 2] = [PGNavmeshType::Terrain, PGNavmeshType::Water];
 
-/// Where PGNavmesh::filename saves them, as asset paths.
-fn navmesh_path(map: &str, kind: PGNavmeshType) -> String {
-    let suffix = match kind {
+/// The name of a navmesh kind in file names and `MapMeta::navmeshes`.
+pub fn navmesh_kind_name(kind: PGNavmeshType) -> &'static str {
+    match kind {
         PGNavmeshType::Terrain => "terrain",
         PGNavmeshType::Water => "water",
-    };
-    format!("game_map/{map}/navmesh/{map}_{suffix}.nav.json")
+    }
+}
+
+/// Where PGNavmesh::filename saves them, as asset paths.
+fn navmesh_path(map: &str, kind: PGNavmeshType) -> String {
+    format!("game_map/{map}/navmesh/{map}_{}.nav.json", navmesh_kind_name(kind))
 }
 
 fn sync_navmeshes(
@@ -82,6 +87,7 @@ fn sync_navmeshes(
     desired: Res<DesiredChunks>,
     mut loaded: ResMut<LoadedNavmeshes>,
     ass: Res<AssetServer>,
+    maps: Res<MapsData>,
 ) {
     let active: HashSet<String> = desired.0.iter().map(|id| id.map.clone()).collect();
 
@@ -95,7 +101,13 @@ fn sync_navmeshes(
     });
 
     for map in active {
+        // Only the navmeshes the map lists (requesting a missing file logs an asset error);
+        // older metas don't list them, so try every kind.
+        let listed = maps.data.get(&map).and_then(|m| m.navmeshes.clone());
         for kind in NAVMESH_KINDS {
+            if listed.as_ref().is_some_and(|l| !l.iter().any(|k| k == navmesh_kind_name(kind))) {
+                continue;
+            }
             let key = (map.clone(), kind);
             if loaded.0.contains_key(&key) {
                 continue;
@@ -419,12 +431,34 @@ fn build_heightmap_chunks(
 
 // ───────────────────────── objects ─────────────────────────
 
+/// Mesh and fallback material shared by all water planes (a 1 x 1 plane scaled to its size).
+#[derive(Default)]
+struct WaterAssets(Option<(Handle<Mesh>, Handle<StandardMaterial>)>);
+
 fn spawn_chunk_objects(
     mut commands: Commands,
     ass: Res<AssetServer>,
     scenes: Res<Assets<SceneData>>,
     pending: Query<(Entity, &ChunkPending)>,
+    water_data: Option<Res<crate::water::WaterData>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut water: Local<WaterAssets>,
 ) {
+    let (water_mesh, water_material) = water
+        .0
+        .get_or_insert_with(|| {
+            (
+                meshes.add(Plane3d::default().mesh().size(1.0, 1.0)),
+                materials.add(StandardMaterial {
+                    base_color: Color::srgba(0.1, 0.35, 0.55, 0.8),
+                    alpha_mode: AlphaMode::Blend,
+                    perceptual_roughness: 0.1,
+                    ..default()
+                }),
+            )
+        })
+        .clone();
     for (root, pending) in &pending {
         let Some(scene) = scenes.get(&pending.0) else {
             if matches!(ass.load_state(&pending.0), LoadState::Failed(_)) {
@@ -468,8 +502,22 @@ fn spawn_chunk_objects(
                                     GltfAssetLabel::Scene(0).from_asset(format!("objects/{name}.glb")),
                                 )));
                             }
+                            EditorAsset::Water => {
+                                // Exported with scale = its size (x, 1, z), so a unit plane fits.
+                                let dims = Vec2::new(obj.scale[0], obj.scale[2]);
+                                entity.insert((
+                                    WaterChunk { dims, ..default() },
+                                    Name::new("water"),
+                                    Mesh3d(water_mesh.clone()),
+                                    NotShadowCaster,
+                                ));
+                                match &water_data {
+                                    Some(data) => { entity.insert(MeshMaterial3d(data.material.clone())); }
+                                    None => { entity.insert(MeshMaterial3d(water_material.clone())); }
+                                }
+                            }
                             _ => {
-                                // TODO: Spawner / Marker / Water. Hand off to the code that
+                                // TODO: Spawner / Marker. Hand off to the code that
                                 // builds them from obj.data in your current scene loader.
                             }
                         }

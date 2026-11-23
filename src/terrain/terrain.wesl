@@ -57,6 +57,13 @@ const TAU: f32 = 6.28318530718;
 const HEX_CONTRAST: f32 = 2.2;
 /// Hex cell size in texture repeats: bigger cells = fewer seams, smaller = less repetition.
 const HEX_CELL: f32 = 0.6;
+/// Detail: a second sample of each layer at this many times its frequency (non-integer, so
+/// the two never line up), modulating brightness and bumps up close.
+const DETAIL_FREQUENCY: f32 = 3.7;
+const DETAIL_STRENGTH: f32 = 0.25;
+/// Height blending: how far (in layer "height", taken from texture brightness) a transition
+/// reaches. Small = crisp, texture-shaped edges between layers; large = soft fades.
+const BLEND_DEPTH: f32 = 0.15;
 
 /// PCG2D integer hash (Jarzynski & Olano 2020). Exact on every GPU, unlike fract(sin(x)),
 /// which loses precision for large arguments and then shows up as hard seams.
@@ -137,6 +144,20 @@ fn sample_rotated(i: i32, uv: vec2<f32>, ddx: vec2<f32>, ddy: vec2<f32>, rot: ma
     return s;
 }
 
+fn luminance(c: vec3<f32>) -> f32 {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+/// Fine detail of layer `i` at `uv`: brightness factor (around 1) and a tangent-space bump.
+fn layer_detail(i: i32, uv: vec2<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> vec4<f32> {
+    let rot = mat2x2<f32>(0.8, 0.6, -0.6, 0.8); // turned against the base sample
+    let d = sample_rotated(i, uv * DETAIL_FREQUENCY, ddx * DETAIL_FREQUENCY, ddy * DETAIL_FREQUENCY, rot, vec2(0.37, 0.71));
+    // The layer's average colour: its smallest mip.
+    let average = textureSampleLevel(albedo_array, albedo_sampler, vec2(0.5), i, 16.0).rgb;
+    let factor = luminance(d.albedo) / max(luminance(average), 0.02);
+    return vec4(mix(1.0, factor, DETAIL_STRENGTH), d.normal * DETAIL_STRENGTH);
+}
+
 fn sample_layer(i: i32, uv: vec2<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> LayerSample {
     let identity = mat2x2<f32>(1.0, 0.0, 0.0, 1.0);
     if layer_param(params.anti_tiling, i) < 0.5 {
@@ -197,16 +218,48 @@ fn fragment(
     var normal_ts = vec3(0.0, 0.0, unpainted);    // ...and flat
     var roughness = pbr_input.material.perceptual_roughness * unpainted;
 
+    // Sample the painted layers, then blend them by weight *and* height: where two layers
+    // meet, the "higher" one (brighter texture) wins pixel by pixel, so transitions follow the
+    // textures' own shapes (grass between stones) instead of the splat's soft gradient.
+    var samples: array<LayerSample, 8>;
+    var heights: array<f32, 8>;
+    var top = -1.0;
     for (var i = 0; i < LAYERS; i++) {
         if w[i] <= 0.0005 {
             continue; // not painted here: skip its texture samples
         }
         let inv_tile = 1.0 / max(layer_param(params.tile_size, i), 0.001);
-        let layer = sample_layer(i, world_xz * inv_tile, world_ddx * inv_tile, world_ddy * inv_tile);
+        let uv = world_xz * inv_tile;
+        var layer = sample_layer(i, uv, world_ddx * inv_tile, world_ddy * inv_tile);
+        let detail = layer_detail(i, uv, world_ddx * inv_tile, world_ddy * inv_tile);
+        layer.albedo *= detail.x;
+        layer.normal = normalize(layer.normal + vec3(detail.yz, 0.0));
+        samples[i] = layer;
+        // Height = brightness relative to the layer's own average (around 0.5), so dark and
+        // bright layers get an equal say; plus the painted weight.
+        let average = luminance(textureSampleLevel(albedo_array, albedo_sampler, vec2(0.5), i, 16.0).rgb);
+        heights[i] = clamp(luminance(layer.albedo) / max(average, 0.02) * 0.5, 0.0, 1.0) + w[i];
+        top = max(top, heights[i]);
+    }
+    var blend = array<f32, 8>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    var blend_sum = 0.0;
+    for (var i = 0; i < LAYERS; i++) {
+        if w[i] <= 0.0005 {
+            continue;
+        }
+        blend[i] = max(heights[i] - (top - BLEND_DEPTH), 0.0);
+        blend_sum += blend[i];
+    }
+    for (var i = 0; i < LAYERS; i++) {
+        if blend[i] <= 0.0 {
+            continue;
+        }
+        // Rescaled to the painted share, so the unpainted remainder keeps its weight.
+        let k = blend[i] / max(blend_sum, 1e-5) * painted;
         let brightness = 1.0 + layer_param(params.macro_variation, i) * (macro_noise * 2.0 - 1.0);
-        albedo += layer.albedo * brightness * w[i];
-        normal_ts += layer.normal * w[i];
-        roughness += layer_param(params.roughness, i) * w[i];
+        albedo += samples[i].albedo * brightness * k;
+        normal_ts += samples[i].normal * k;
+        roughness += layer_param(params.roughness, i) * k;
     }
 
     // base_color already holds material colour * vertex colour: keep that as a tint.

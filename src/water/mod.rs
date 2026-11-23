@@ -6,6 +6,7 @@ use bevy::reflect::Reflect;
 use bevy::light::NotShadowCaster;
 use bevy::render::render_resource::*;
 use bevy::shader::ShaderRef;
+use bevy::asset::embedded_asset;
 use libm::sinf;
 use bevy_pg_core::prelude::{GameState, EditorAsset, WaterChunk};
 
@@ -16,6 +17,7 @@ pub struct WaterPlugin;
 
 impl Plugin for WaterPlugin {
     fn build(&self, app: &mut App) {
+        embedded_asset!(app, "water.wesl");
         app
         .insert_resource(WaveUpdate::new())
         .add_plugins(MaterialPlugin::<WaterMaterial> {
@@ -24,10 +26,41 @@ impl Plugin for WaterPlugin {
         // .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
         .add_plugins(WaterdepthPlugin)
         .add_systems(PostUpdate, update_water_chunk_data)
+        .add_systems(Startup, setup_water_material)
         ;
 
 
     }
+}
+
+const WATER_SHADER: &str = "embedded://bevy_pg_scenes/water/water.wesl";
+
+/// The shared water material ([`WaterData`], used by [`nice_water`] and by the chunk streamer
+/// for exported water), unless the app made its own. Shoreline foam is off
+/// (`water_height` outside 0..1): it needs the depth camera of `setup_water_depth`, which only
+/// works for a single big water plane.
+fn setup_water_material(
+    mut commands: Commands,
+    existing: Option<Res<WaterData>>,
+    depth: Option<Res<crate::water::depth::WakeDepthTextures>>,
+    mut materials: ResMut<Assets<WaterMaterial>>,
+) {
+    if existing.is_some() {
+        return;
+    }
+    let material = materials.add(WaterMaterial {
+        base: StandardMaterial {
+            perceptual_roughness: 0.1,
+            alpha_mode: AlphaMode::Blend,
+            ..default()
+        },
+        extension: WaterMaterialExtension {
+            scale: Vec2::ONE,
+            water_height: 2.0,
+            depth_texture: depth.map(|d| d.main_depth.clone()),
+        },
+    });
+    commands.insert_resource(WaterData { material, animate_height: false });
 }
 
 fn update_water_chunk_data(
@@ -157,9 +190,9 @@ impl MaterialExtension for WaterMaterialExtension {
     fn enable_shadows() -> bool { true }
 
     fn fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
+        WATER_SHADER.into()
     }
     fn deferred_fragment_shader() -> ShaderRef {
-        "shaders/water.wgsl".into()
+        WATER_SHADER.into()
     }
 }
