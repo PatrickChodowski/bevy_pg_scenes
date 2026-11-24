@@ -209,6 +209,37 @@ pub struct Marker {
 #[derive(Component, Reflect)]
 pub struct Markee; // Result of Markers processing
 
+// Marker kinds, shared by the editor and the game. An `EditorAsset::Marker(name)` becomes a
+// `Marker` with the id for its name.
+pub const MARKER_LOCATION: usize = 0;
+pub const MARKER_ENTRYPORT: usize = 1;
+pub const MARKER_EXITPORT: usize = 2;
+
+/// `Marker::id` for an `EditorAsset::Marker` name; None for an unknown name.
+pub fn marker_id(name: &str) -> Option<usize> {
+    match name {
+        "Marker_Locations" => Some(MARKER_LOCATION),
+        "Marker_EntryPort" => Some(MARKER_ENTRYPORT),
+        "Marker_ExitPort" => Some(MARKER_EXITPORT),
+        _ => None,
+    }
+}
+
+/// A marker's radius in world units: its X scale. The editor draws it as a cylinder of
+/// radius 1 scaled by its transform, so what it shows is what the game uses.
+pub fn marker_radius(scale: Vec3) -> f32 {
+    scale.x
+}
+
+// Keys of `Marker::data` (and of the marker's `SceneObjectData::data`).
+/// The location's name.
+pub const MARKER_NAME: &str = "Name";
+/// Settlement tier (1 = major centre).
+pub const MARKER_TIER: &str = "tier";
+/// Who placed it: "settlements" for markers placed from the settlement list (the editor's bulk
+/// import replaces those), absent for hand-placed ones.
+pub const MARKER_SOURCE: &str = "source";
+
 impl Marker {
     pub fn new(id: usize) -> Self {
         Marker{id, processed: false, data: HashMap::new()}

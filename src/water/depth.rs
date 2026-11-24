@@ -299,6 +299,8 @@ pub fn setup_water_depth(
             wakes: crate::water::WakeUniform::default(),
             open_sea: None,
             sea: crate::water::SeaUniform::default(),
+            river_look: None,
+            river_flow: None,
         },
     });
     commands.insert_resource(WaterData {

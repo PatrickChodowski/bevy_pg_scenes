@@ -35,6 +35,12 @@ pub struct MapHeightmap {
     pub height_max: f32,
     /// Quads per chunk side.
     pub chunk_quads: u32,
+    /// River and lake water for the water shader (water::rivers): RGBA8 images, `samples` a side
+    /// (no apron), in `terrain/`. None = all sea.
+    #[serde(default)]
+    pub water_look_file: Option<String>,
+    #[serde(default)]
+    pub water_flow_file: Option<String>,
 }
 
 impl MapHeightmap {
@@ -168,6 +174,8 @@ mod tests {
             height_min: 0.0,
             height_max: 1.0,
             chunk_quads,
+            water_look_file: None,
+            water_flow_file: None,
         }
     }
 

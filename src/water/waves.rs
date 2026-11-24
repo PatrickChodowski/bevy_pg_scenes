@@ -163,7 +163,7 @@ mod tests {
 
     #[test]
     fn height_matches_displaced_point() {
-        let field = OpenSeaField { min: Vec2::splat(-1000.0), texel: 8.0, width: 250, height: 250, dist: vec![255; 250 * 250], depth: vec![160; 250 * 250] };
+        let field = OpenSeaField { min: Vec2::splat(-1000.0), texel: 8.0, width: 250, height: 250, dist: vec![255; 250 * 250], depth: vec![160; 250 * 250], mean_depth: vec![160; 250 * 250] };
         let uniform = SeaUniform { enabled: 1.0, ..default() };
         let sea = Sea { field: &field, uniform: &uniform };
         for i in 0..20 {

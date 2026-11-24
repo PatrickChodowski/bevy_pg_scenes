@@ -1,4 +1,4 @@
-//! Weather. For now the wind: a direction and a strength that drift between random targets,
+//! Weather: the wind and the rain. The wind: a direction and a strength that drift between random targets,
 //! with gusts on top. The sea follows it (water/mod.rs `follow_wind`: wave height from the
 //! strength, the swell turning towards its direction) and gameplay reads it (boats sail faster
 //! with it behind them).
@@ -6,6 +6,9 @@
 //! Storms later: a storm is a [`WindDriver`] with a higher strength range and quicker, bigger
 //! changes (and its own effects: rain, darker light, lightning), so the sea and the boats need
 //! nothing new for it.
+//!
+//! [`Rain`] is how hard it rains (the game sets it): the water shows rings from the drops,
+//! drifting a little with the wind (water/mod.rs `follow_wind`, water.wesl `rain_ripples`).
 
 use bevy::prelude::*;
 use rand::RngExt;
@@ -15,9 +18,16 @@ pub struct WeatherPlugin;
 impl Plugin for WeatherPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Wind>()
+            .init_resource::<Rain>()
             .init_resource::<WindDriver>()
             .add_systems(Update, drive_wind);
     }
+}
+
+/// How hard it rains: 0 dry .. 1 downpour. Rings on the water.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Reflect)]
+pub struct Rain {
+    pub intensity: f32,
 }
 
 /// The wind now.

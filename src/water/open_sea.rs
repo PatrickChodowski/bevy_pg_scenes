@@ -55,8 +55,12 @@ pub struct OpenSeaField {
     pub height: u32,
     /// Distance to the nearest land per texel (world units / DIST_UNIT, capped at 255), row-major.
     pub dist: Vec<u8>,
-    /// Water depth per texel (world units / DEPTH_UNIT, capped at 255; 0 on land), row-major.
+    /// Water depth per texel (world units / DEPTH_UNIT, capped at 255; 0 on land), row-major:
+    /// of its shallowest sample (the waves stay off shallow banks).
     pub depth: Vec<u8>,
+    /// Mean water depth per texel (same units; land counts as 0): smooth, for how the water
+    /// looks (the shallowest sample per texel would show the texels as squares).
+    pub mean_depth: Vec<u8>,
 }
 
 impl OpenSeaField {
@@ -152,8 +156,8 @@ fn bake_open_sea(
             let mut image = Image::new(
                 Extent3d { width: field.width, height: field.height, depth_or_array_layers: 1 },
                 TextureDimension::D2,
-                field.dist.iter().zip(&field.depth).flat_map(|(&d, &z)| [d, z]).collect(),
-                TextureFormat::Rg8Unorm,
+                field.dist.iter().zip(&field.depth).zip(&field.mean_depth).flat_map(|((&d, &z), &m)| [d, z, m, 255]).collect(),
+                TextureFormat::Rgba8Unorm,
                 RenderAssetUsages::RENDER_WORLD,
             );
             image.sampler = ImageSampler::linear();
@@ -194,6 +198,9 @@ fn bake(maps: &[MapHeights], min: Vec2, max: Vec2) -> OpenSeaField {
     let mut land = vec![false; w * h];
     // Highest ground per texel (none = no map here: deep).
     let mut ground = vec![f32::MIN; w * h];
+    // Sum of water depths per texel and how many samples (for the mean).
+    let mut depth_sum = vec![0.0f32; w * h];
+    let mut depth_count = vec![0u32; w * h];
     for map in maps {
         let (hm, stride, apron) = (&map.hm, map.hm.stride(), map.hm.apron as usize);
         for j in 0..hm.samples {
@@ -202,6 +209,8 @@ fn bake(maps: &[MapHeights], min: Vec2, max: Vec2) -> OpenSeaField {
                 let p = (map.origin.xz() + hm.local_xz(i, j) - min) / texel;
                 let (x, z) = ((p.x as usize).min(w - 1), (p.y as usize).min(h - 1));
                 ground[z * w + x] = ground[z * w + x].max(y);
+                depth_sum[z * w + x] += (WATER_LEVEL - y).max(0.0);
+                depth_count[z * w + x] += 1;
                 if y > WATER_LEVEL {
                     land[z * w + x] = true;
                 }
@@ -234,7 +243,12 @@ fn bake(maps: &[MapHeights], min: Vec2, max: Vec2) -> OpenSeaField {
 
     let dist = d2.iter().map(|&d| (d.sqrt() * texel / DIST_UNIT).min(255.0) as u8).collect();
     let depth = ground.iter().map(|&g| ((WATER_LEVEL - g) / DEPTH_UNIT).clamp(0.0, 255.0) as u8).collect();
-    OpenSeaField { min, texel, width: w as u32, height: h as u32, dist, depth }
+    let mean_depth = depth_sum
+        .iter()
+        .zip(&depth_count)
+        .map(|(&s, &n)| if n == 0 { 255 } else { (s / n as f32 / DEPTH_UNIT).clamp(0.0, 255.0) as u8 })
+        .collect();
+    OpenSeaField { min, texel, width: w as u32, height: h as u32, dist, depth, mean_depth }
 }
 
 /// 1D squared distance transform of `f` (0 at features, huge elsewhere) into `d`.

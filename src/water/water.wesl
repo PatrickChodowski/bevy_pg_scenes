@@ -14,6 +14,11 @@
 // (the `open_sea` texture, baked in open_sea.rs): flat along the coasts, rolling swell far out,
 // with whitecaps on the crests. The water planes are subdivided for it.
 //
+// Rivers and lakes (the river_look / river_flow textures, water/rivers.rs) have their own water:
+// each river's colour (tea-dark peat rivers, grey-brown silty ones, green lake-fed ones), light
+// streaks drifting downstream at its speed, no swell, and murkier water more opaque. Blended per
+// pixel, so a river fades into the sea at its mouth.
+//
 // WESL (not plain WGSL): Bevy 0.20 only resolves imports and @if conditionals in .wesl files.
 
 import bevy_pbr::render::{
@@ -52,6 +57,9 @@ struct Wakes {
     trail: array<vec4<f32>, 128>,
     // Per trail point: strength (the boat's speed then, 0..1), 1 if it starts a boat's trail.
     trail_info: array<vec4<f32>, 128>,
+    splash_count: u32,
+    // Splashes (oar blades entering the water, ...): world x, z, radius, age (0 new .. 1 gone).
+    splashes: array<vec4<f32>, 64>,
 }
 @group(constants::MATERIAL_BIND_GROUP) @binding(104) var<uniform> wakes: Wakes;
 
@@ -69,10 +77,130 @@ struct Sea {
     swell_b: vec4<f32>,
     // The chunk streaming focus: x, z, load radius (0 = none), -. See edge_fade.
     focus: vec4<f32>,
+    // The river textures' world rect: min x, min z, 1 / width, 1 / depth (z = 0: no rivers).
+    rivers: vec4<f32>,
+    // Rain: intensity 0..1, the wind (x, z: where it blows to, times its strength), -.
+    rain: vec4<f32>,
 }
 @group(constants::MATERIAL_BIND_GROUP) @binding(105) var open_sea: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(106) var open_sea_sampler: sampler;
 @group(constants::MATERIAL_BIND_GROUP) @binding(107) var<uniform> sea: Sea;
+@group(constants::MATERIAL_BIND_GROUP) @binding(108) var river_look: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(109) var river_look_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(110) var river_flow: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(111) var river_flow_sampler: sampler;
+
+/// Flow speed (world units / s) the river_flow texture's blue channel stores as 1
+/// (terrains::rivers::MAX_FLOW in the editor).
+const RIVER_MAX_FLOW: f32 = 4.0;
+/// How much of a river's own colour shows over the game's (blue) water: true-to-life river
+/// colours (peaty brown, silty grey) on their own read as mud, not water.
+const RIVER_TINT: f32 = 0.45;
+
+/// River or lake water at a point: how much it is (0 = sea), its colour (linear), the direction
+/// it flows (0 for lakes), speed (world units / s) and turbidity (0 clear .. 1 opaque).
+struct River {
+    weight: f32,
+    color: vec3<f32>,
+    dir: vec2<f32>,
+    speed: f32,
+    turbidity: f32,
+}
+
+fn river_at(xz: vec2<f32>) -> River {
+    var r: River;
+    r.weight = 0.0;
+    r.color = vec3(0.0);
+    r.dir = vec2(0.0);
+    r.speed = 0.0;
+    r.turbidity = 0.0;
+    if sea.rivers.z <= 0.0 {
+        return r;
+    }
+    let uv = (xz - sea.rivers.xy) * sea.rivers.zw;
+    if any(uv < vec2(0.0)) || any(uv > vec2(1.0)) {
+        return r;
+    }
+    let look = textureSampleLevel(river_look, river_look_sampler, uv, 0.0);
+    if look.a < 0.004 {
+        return r;
+    }
+    // Stored premultiplied by the weight (so it filters right at the banks): divide it out.
+    let flow = textureSampleLevel(river_flow, river_flow_sampler, uv, 0.0);
+    let w = look.a;
+    r.weight = w;
+    r.color = pow(clamp(look.rgb / w, vec3(0.0), vec3(1.0)), vec3(2.2)); // sRGB -> linear
+    let d = (flow.rg - 0.5) * 2.0 / w;
+    r.dir = select(vec2(0.0), normalize(d), length(d) > 0.05);
+    r.speed = flow.b / w * RIVER_MAX_FLOW;
+    r.turbidity = clamp(flow.a / w, 0.0, 1.0);
+    return r;
+}
+
+/// The light pattern on a river, drifting downstream: two copies of the pattern carried along
+/// the flow, each starting over while the other one shows (a flow map), so it can flow forever
+/// without stretching.
+fn river_ripples(xz: vec2<f32>, dir: vec2<f32>, speed: f32, t: f32) -> f32 {
+    let period = 3.0;
+    let phase_a = fract(t / period);
+    let phase_b = fract(t / period + 0.5);
+    let freq = WAVE_FREQUENCY * 1.7;
+    let carried = dir * speed * period * freq;
+    let p = xz * freq;
+    let a = ripple_cells(p - carried * phase_a);
+    let b = ripple_cells(p - carried * phase_b + vec2(0.37, 0.71));
+    return mix(a, b, abs(phase_a * 2.0 - 1.0));
+}
+
+fn ripple_cells(p: vec2<f32>) -> f32 {
+    return pow(clamp((voronoi(p, 1.0) + voronoi(p * 0.55 + vec2(3.1, 1.7), 2.0)) * 0.4, 0.0, 1.0), 4.0);
+}
+
+/// Rain on the water (Sea::rain): rings spreading from the drops. The water is cut into world
+/// cells; now and then a drop lands at a random spot in a cell (more often the harder it rains)
+/// and a ring spreads from it and fades. Two offset layers so the grid doesn't show. The rings
+/// drift a little with the wind and are stretched a little along it. Returns the tilt of the
+/// surface's slope (x, z) and how bright the ring crests are.
+const RAIN_CELL: f32 = 1.6;        // world units
+const RAIN_RATE: f32 = 0.9;        // drop cycles per cell per second
+const RAIN_RING_MAX: f32 = 0.42;   // ring radius when it's gone (cells)
+const RAIN_RING_WIDTH: f32 = 0.08; // (cells)
+const RAIN_DRIFT: f32 = 0.6;       // world units per second in a full wind
+const RAIN_STRETCH: f32 = 0.25;    // along the wind, in a full wind
+const RAIN_TILT: f32 = 0.3;
+const RAIN_DENSITY: f32 = 0.5;     // share of the cells with a drop each cycle in a downpour
+
+fn rain_ripples(xz: vec2<f32>, t: f32) -> vec3<f32> {
+    let wind = sea.rain.yz;
+    var tilt = vec2(0.0);
+    var glint = 0.0;
+    for (var layer = 0u; layer < 2u; layer++) {
+        let lf = f32(layer);
+        let p = (xz - wind * t * RAIN_DRIFT) / RAIN_CELL + vec2(lf * 0.37, lf * 0.71);
+        let base = floor(p);
+        let key = base + vec2(lf * 31.0, lf * 17.0);
+        let cycles = t * RAIN_RATE + random2(key).x;
+        let cycle = floor(cycles);
+        let phase = fract(cycles);
+        // Whether this cycle has a drop, and where it lands.
+        let drop = random2(key + vec2(cycle * 0.137, cycle * 0.291));
+        if drop.x > sea.rain.x * RAIN_DENSITY {
+            continue;
+        }
+        let centre = base + 0.3 + 0.4 * random2(key + drop * 11.0);
+        var dv = p - centre;
+        dv -= wind * dot(dv, wind) * RAIN_STRETCH;
+        let d = length(dv);
+        // The ring: a crest with a trough inside, sin(3x) * gaussian across it, and its slope.
+        let x = (d - phase * RAIN_RING_MAX) / RAIN_RING_WIDTH;
+        let g = exp(-x * x);
+        let fade = (1.0 - phase) * (1.0 - phase);
+        let slope = (3.0 * cos(3.0 * x) - 2.0 * x * sin(3.0 * x)) * g;
+        tilt += dv / max(d, 1e-4) * slope * fade * RAIN_TILT;
+        glint += max(sin(3.0 * x), 0.0) * g * fade;
+    }
+    return vec3(tilt, glint);
+}
 
 /// World units per texture step (open_sea.rs DIST_UNIT, DEPTH_UNIT).
 const DIST_UNIT: f32 = 4.0;
@@ -81,9 +209,12 @@ const DEPTH_UNIT: f32 = 0.02;
 /// banks and around low islands instead of washing over them).
 const WAVE_MIN_DEPTH: f32 = 0.4;
 const WAVE_FULL_DEPTH: f32 = 2.5;
-/// Seabed depth (world units) where the water stops showing the bottom.
-const BED_CLEAR_DEPTH: f32 = 0.8;
-const BED_DEEP_DEPTH: f32 = 2.2;
+/// Seabed depth (world units; the texel's mean depth) where the water stops showing the bottom.
+/// The sea is at least 0.64 deep from ~2 samples off the land (the import's minimum sea depth),
+/// so that counts as fully deep: only the real shallows right along the coast show the bed, not
+/// offshore banks raised to the minimum.
+const BED_CLEAR_DEPTH: f32 = 0.15;
+const BED_DEEP_DEPTH: f32 = 0.6;
 const TAU: f32 = 6.28318530718;
 const GRAVITY: f32 = 9.81;
 /// Slows the waves down from real deep-water speed (it reads better from above).
@@ -163,13 +294,20 @@ fn sea_field(xz: vec2<f32>) -> vec2<f32> {
     return textureSampleLevel(open_sea, open_sea_sampler, uv, 0.0).rg * 255.0 * vec2(DIST_UNIT, DEPTH_UNIT);
 }
 
+/// Mean water depth (world units) at `xz`: smooth, for the look (only valid when sea.enabled).
+fn sea_mean_depth(xz: vec2<f32>) -> f32 {
+    let uv = (xz - sea.rect.xy) * sea.rect.zw;
+    return textureSampleLevel(open_sea, open_sea_sampler, uv, 0.0).b * 255.0 * DEPTH_UNIT;
+}
+
 /// 0 at the coast and over shallows .. 1 out at open sea.
 fn openness(xz: vec2<f32>) -> f32 {
     if sea.enabled < 0.5 {
         return 0.0;
     }
     let field = sea_field(xz);
-    return smoothstep(sea.calm_distance, sea.open_distance, field.x) * smoothstep(WAVE_MIN_DEPTH, WAVE_FULL_DEPTH, field.y);
+    let sea_water = 1.0 - river_at(xz).weight; // rivers and lakes have no swell
+    return smoothstep(sea.calm_distance, sea.open_distance, field.x) * smoothstep(WAVE_MIN_DEPTH, WAVE_FULL_DEPTH, field.y) * sea_water;
 }
 
 /// 1 .. 0 towards the edge of the loaded water (the streaming focus' load radius): how much the
@@ -324,6 +462,8 @@ const HULL_LENGTH: f32 = 0.85;
 /// Water within this distance (view ray) in front of something, inside a hull's outline, is
 /// water on its deck (see on_deck).
 const DECK_THICKNESS: f32 = 1.0;
+/// Pixels this far (world units) from a hull look for splashes (the oars reach ~4.5 out).
+const SPLASH_REACH: f32 = 7.0;
 /// Wake speed (units/s) at which the trail is at full strength.
 const WAKE_FULL_SPEED: f32 = 12.0;
 
@@ -414,7 +554,7 @@ fn fragment(
     // simply deep; only real shallows show the bottom.
     var bed_deep = 0.0;
     if sea.enabled > 0.5 {
-        bed_deep = smoothstep(BED_CLEAR_DEPTH, BED_DEEP_DEPTH, sea_field(in.world_position.xz).y);
+        bed_deep = smoothstep(BED_CLEAR_DEPTH, BED_DEEP_DEPTH, sea_mean_depth(in.world_position.xz));
     }
     let deep = max(smoothstep(0.0, DEEP_THICKNESS, thickness), bed_deep);
     // Out at sea the waves carry the look: a per-pixel wave normal (lighting and the faces
@@ -451,6 +591,18 @@ fn fragment(
         water_color += SKY_COLOR * fresnel * SKY_REFLECTION * open;
     }
 
+    // Rain rings: bend the normal (the lighting) and add a glint on their crests (added to the
+    // colour after the rivers, so they show on rivers and lakes too). Faded out where a pixel
+    // covers too much water for them to show without shimmering.
+    var rain_glint = 0.0;
+    if sea.rain.x > 0.001 {
+        let rings = rain_ripples(xz, t) * (1.0 - smoothstep(0.05, 0.15, footprint));
+        n = normalize(n - vec3(rings.x, 0.0, rings.y));
+        pbr_input.N = n;
+        pbr_input.world_normal = n;
+        rain_glint = rings.z;
+    }
+
     // Highlights: the voronoi light pattern. Along the coast as it always was. Out at sea the same
     // pattern, but carried by the swell: drifting with the wind, stretched along the crests, bent
     // by the waves (like light refracting through them) and lit by them (bright on the crests
@@ -478,6 +630,22 @@ fn fragment(
     var color = water_color + vec3(h) * HIGHLIGHT_COLOR;
     var alpha = mix(SHALLOW_ALPHA, DEEP_ALPHA, deep);
 
+    // Rivers and lakes: their own colour, darker where deep; the light pattern drifting
+    // downstream (still on lakes), fainter on murky water; murkier water shows less of its bed.
+    let river = river_at(xz);
+    if river.weight > 0.004 {
+        let murk = river.turbidity;
+        let tint = mix(water_color, river.color * mix(1.0, 0.6, deep), RIVER_TINT);
+        let ripples = river_ripples(xz + offset * 0.3, river.dir, river.speed, t) * mix(0.75, 0.35, murk);
+        let glint = mix(HIGHLIGHT_COLOR, river.color * 1.6 + vec3(0.15), 0.5);
+        let river_color = tint + vec3(ripples) * glint;
+        color = mix(color, river_color, river.weight);
+        let river_alpha = mix(mix(0.45, 0.75, murk), mix(0.85, 0.96, murk), deep);
+        alpha = mix(alpha, river_alpha, river.weight);
+    }
+
+    color += vec3(rain_glint * 0.35) * HIGHLIGHT_COLOR;
+
     // Foam: a band at the shore with a ragged, moving edge, plus a fainter second line offshore.
     // Smooth noise (not cells) for a ragged, drifting edge: streaks rather than honeycomb.
     let q = in.world_position.xz;
@@ -489,7 +657,8 @@ fn fragment(
     let wave_line = 0.5 + 0.5 * sin(thickness * 4.0 - t * 1.2);
     let wave_mask = smoothstep(0.45, 0.75, voronoi(in.world_position.xz * 0.35 - offset, 1.0));
     let near_shore = 1.0 - smoothstep(FOAM_WIDTH, FOAM_WIDTH * 2.0, edge);
-    foam = max(foam, smoothstep(0.85, 1.0, wave_line) * near_shore * wave_mask * 0.4);
+    // (Not on rivers and lakes: there's no surf rolling in.)
+    foam = max(foam, smoothstep(0.85, 1.0, wave_line) * near_shore * wave_mask * 0.4 * (1.0 - river.weight));
     // Boats. All boat foam is patchy: noise thresholded by a "density" that is highest at the
     // hull and falls off sideways and with age, so the foam thins out into flecks instead of
     // ending at a hard edge. The noise is fixed in the world (only drifting with the waves).
@@ -524,6 +693,8 @@ fn fragment(
     // deck (thin water). Where the seabed is behind it instead, it's water seen under a hull
     // that's riding up on a wave, and must stay, or the sand shows through.
     var inside_hulls = 0.0;
+    // Splashes only happen next to boats (oars): only pixels near one look at them.
+    var near_splashes = false;
     for (var i = 0u; i < min(wakes.count, 16u); i++) {
         let item = wakes.items[i];
         let size = wakes.sizes[i];
@@ -556,6 +727,7 @@ fn fragment(
         let hull_density = (0.45 + 0.25 * moving * bow) * smoothstep(-0.3, 0.0, hull_dist) * exp(-off_hull * off_hull);
         boat_total = max(boat_total, patches(fleck, hull_density) * 0.75);
         near_boat = max(near_boat, 1.0 - smoothstep(0.3, 2.0, hull_dist));
+        near_splashes = near_splashes || hull_dist < SPLASH_REACH;
         inside_hulls = max(inside_hulls, 1.0 - smoothstep(-0.3, -0.1, hull_dist));
     }
 
@@ -583,6 +755,21 @@ fn fragment(
         let edge = (dist - width * 1.3) / (0.3 + age * 1.2);
         let arm = 0.3 * strength * exp(-edge * edge) * life;
         boat_total = max(boat_total, max(patches(fleck, core), patches(fleck, arm) * 0.7) * 0.6);
+    }
+    // Splashes: a patch of foam that spreads a little and dissolves (patchy, like the wakes).
+    if near_splashes {
+        for (var j = 0u; j < min(wakes.splash_count, 64u); j++) {
+            let sp = wakes.splashes[j];
+            let d = distance(q, sp.xy);
+            let r = sp.z * (0.7 + 0.5 * sp.w);
+            if d > r * 2.0 {
+                continue;
+            }
+            let life = 1.0 - sp.w;
+            let x = d / r;
+            let density = 0.55 * life * sqrt(life) * exp(-x * x * 1.5);
+            boat_total = max(boat_total, patches(fleck, density) * 0.7);
+        }
     }
     foam = max(foam * (1.0 - near_boat), boat_total);
 

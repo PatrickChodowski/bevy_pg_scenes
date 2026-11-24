@@ -519,9 +519,21 @@ fn spawn_chunk_objects(
                                     None => { entity.insert(MeshMaterial3d(water_material.clone())); }
                                 }
                             }
+                            EditorAsset::Marker(name) => match crate::types::marker_id(name) {
+                                // Turned into locations and ports by the game (it watches for
+                                // new `Marker`s); its world position is its GlobalTransform.
+                                Some(id) => {
+                                    let mut marker = crate::types::Marker::new(id);
+                                    if let Some(data) = &obj.data {
+                                        marker.data.extend(data.iter().map(|(k, v)| (k.clone(), v.clone())));
+                                    }
+                                    entity.insert((marker, Name::new(name.clone())));
+                                }
+                                None => warn!("Unknown marker '{name}' in a chunk scene, skipped"),
+                            },
                             _ => {
-                                // TODO: Spawner / Marker. Hand off to the code that
-                                // builds them from obj.data in your current scene loader.
+                                // TODO: Spawner. Hand off to the code that builds them from
+                                // obj.data in your current scene loader.
                             }
                         }
                     }

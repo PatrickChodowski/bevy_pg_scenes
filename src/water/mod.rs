@@ -12,6 +12,7 @@ use bevy_pg_core::prelude::{GameState, EditorAsset, WaterChunk};
 
 pub mod depth;
 pub mod open_sea;
+pub mod rivers;
 pub mod waves;
 use crate::water::depth::WaterdepthPlugin;
 use crate::water::open_sea::OpenSeaPlugin;
@@ -23,12 +24,17 @@ impl Plugin for WaterPlugin {
         embedded_asset!(app, "water.wesl");
         app
         .insert_resource(WaveUpdate::new())
+        .init_resource::<WaterSplashes>()
+        // The sea follows the wind (`follow_wind`). WeatherPlugin drives it; without that plugin
+        // (e.g. the editor) the wind stays at its default, a steady moderate breeze.
+        .init_resource::<crate::weather::Wind>()
         .add_plugins(MaterialPlugin::<WaterMaterial> {
             ..default()
         })
         // .add_systems(Update, animate_water.run_if(in_state(GameState::Play)))
         .add_plugins(WaterdepthPlugin)
         .add_plugins(OpenSeaPlugin)
+        .add_plugins(rivers::RiverWaterPlugin)
         .add_systems(PostUpdate, update_water_chunk_data)
         .add_systems(Update, (follow_wind, track_streaming_focus))
         .add_systems(Startup, setup_water_material)
@@ -71,6 +77,8 @@ fn setup_water_material(
             wakes: WakeUniform::default(),
             open_sea: None,
             sea: SeaUniform::default(),
+            river_look: None,
+            river_flow: None,
         },
     });
     commands.insert_resource(WaterData { material, animate_height: false });
@@ -218,6 +226,15 @@ pub struct WaterMaterialExtension {
 
     #[uniform(107)]
     pub sea: SeaUniform,
+
+    /// River and lake water over the world (water::rivers): colour and weight, flow and
+    /// turbidity. Where `SeaUniform::rivers` says.
+    #[texture(108)]
+    #[sampler(109)]
+    pub river_look: Option<Handle<Image>>,
+    #[texture(110)]
+    #[sampler(111)]
+    pub river_flow: Option<Handle<Image>>,
 }
 
 /// Open sea waves.
@@ -241,6 +258,11 @@ pub struct SeaUniform {
     /// waves stop moving the surface sideways: there's no next water plane there, and the edge
     /// pulling in would show a strip of sea floor. Radius 0 = no fade.
     pub focus: Vec4,
+    /// The river textures' world rect: min x, min z, 1 / width, 1 / depth; z = 0: no rivers.
+    pub rivers: Vec4,
+    /// Rain (`weather::Rain`): intensity 0..1, and the wind that drifts the rings (x, z: where
+    /// it blows to, times its strength), -. Set by `follow_wind`.
+    pub rain: Vec4,
 }
 
 impl Default for SeaUniform {
@@ -254,6 +276,8 @@ impl Default for SeaUniform {
             swell_a: Vec4::new(0.35, 1.0, 0.0, 0.0),
             swell_b: Vec4::ZERO,
             focus: Vec4::ZERO,
+            rivers: Vec4::ZERO,
+            rain: Vec4::ZERO,
         }
     }
 }
@@ -293,6 +317,7 @@ const SWELL_FADE_SECS: f32 = 25.0;
 fn follow_wind(
     time: Res<Time>,
     wind: Res<crate::weather::Wind>,
+    rain: Option<Res<crate::weather::Rain>>,
     water: Option<Res<WaterData>>,
     mut materials: ResMut<Assets<WaterMaterial>>,
     mut fade: Local<Option<f32>>,
@@ -326,8 +351,14 @@ fn follow_wind(
         None => {}
     }
 
+    // Rain rings, drifting with the wind (not its gusts: the rings would jerk about).
+    let intensity = rain.map_or(0.0, |r| r.intensity.clamp(0.0, 1.0));
+    let push = wind.towards() * wind.strength.min(1.5);
+    sea.rain = Vec4::new(intensity, push.x, push.y, 0.0);
+
     let old = &material.extension.sea;
-    let changed = (old.wave_scale - sea.wave_scale).abs() > 1e-4 || old.swell_a != sea.swell_a || old.swell_b != sea.swell_b;
+    let changed = (old.wave_scale - sea.wave_scale).abs() > 1e-4 || old.swell_a != sea.swell_a || old.swell_b != sea.swell_b
+        || (old.rain - sea.rain).abs().max_element() > 1e-3;
     if changed {
         if let Some(mut material) = materials.get_mut(&water.material) {
             material.extension.sea = sea;
@@ -358,6 +389,33 @@ pub struct WakeUniform {
     pub trail: [Vec4; MAX_TRAIL],
     /// Per trail point: strength (0..1, the boat's speed then), 1 if it starts a boat's trail, -, -.
     pub trail_info: [Vec4; MAX_TRAIL],
+    pub splash_count: u32,
+    /// Splashes (from [`WaterSplashes`]): world x, z, radius, age (0 new .. 1 gone).
+    pub splashes: [Vec4; MAX_SPLASHES],
+}
+
+/// How many splashes the water shows at once (the nearest to the camera).
+pub const MAX_SPLASHES: usize = 64;
+
+/// Short-lived foam on the water: oar blades entering it, things falling in. Add them with
+/// [`WaterSplashes::add`]; they age and go by themselves. Only shown near boats (the shader looks
+/// for them within a few units of a hull).
+#[derive(Resource, Default)]
+pub struct WaterSplashes(Vec<Splash>);
+
+#[derive(Clone, Copy)]
+struct Splash {
+    pos: Vec2,
+    radius: f32,
+    age: f32,
+    life: f32,
+}
+
+impl WaterSplashes {
+    /// A splash at world `pos` (x, z), `radius` units across at first, lasting `life` seconds.
+    pub fn add(&mut self, pos: Vec2, radius: f32, life: f32) {
+        self.0.push(Splash { pos, radius, age: 0.0, life: life.max(0.05) });
+    }
 }
 
 impl Default for WakeUniform {
@@ -369,6 +427,8 @@ impl Default for WakeUniform {
             trail_count: 0,
             trail: [Vec4::ZERO; MAX_TRAIL],
             trail_info: [Vec4::ZERO; MAX_TRAIL],
+            splash_count: 0,
+            splashes: [Vec4::ZERO; MAX_SPLASHES],
         }
     }
 }
@@ -401,6 +461,7 @@ fn update_wakes(
     mut materials: ResMut<Assets<WaterMaterial>>,
     time: Res<Time>,
     mut history: Local<WakeHistory>,
+    mut splashes: ResMut<WaterSplashes>,
 ) {
     let Some(water) = water else { return };
     let dt = time.delta_secs().max(1e-4);
@@ -494,8 +555,21 @@ fn update_wakes(
         }
     }
     uniform.trail_count = n as u32;
+
+    // Splashes: age them, drop the finished ones, and show the nearest.
+    splashes.0.retain_mut(|s| {
+        s.age += dt;
+        s.age < s.life
+    });
+    let eye2 = eye.xz();
+    let mut shown: Vec<&Splash> = splashes.0.iter().collect();
+    shown.sort_by(|a, b| a.pos.distance_squared(eye2).total_cmp(&b.pos.distance_squared(eye2)));
+    for (k, s) in shown.iter().take(MAX_SPLASHES).enumerate() {
+        uniform.splashes[k] = Vec4::new(s.pos.x, s.pos.y, s.radius, s.age / s.life);
+        uniform.splash_count = k as u32 + 1;
+    }
     let Some(material) = materials.get(&water.material) else { return };
-    if uniform.count == 0 && material.extension.wakes.count == 0 && material.extension.wakes.trail_count == 0 {
+    if uniform.count == 0 && material.extension.wakes.count == 0 && material.extension.wakes.trail_count == 0 && uniform.splash_count == 0 && material.extension.wakes.splash_count == 0 {
         return; // nothing to update (keeps the material from re-uploading every frame)
     }
     if let Some(mut material) = materials.get_mut(&water.material) {
