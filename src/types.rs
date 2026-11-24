@@ -234,6 +234,8 @@ pub fn marker_radius(scale: Vec3) -> f32 {
 // Keys of `Marker::data` (and of the marker's `SceneObjectData::data`).
 /// The location's name.
 pub const MARKER_NAME: &str = "Name";
+/// On a port marker: the name of the city it belongs to (else: the city whose circle it's in).
+pub const MARKER_CITY: &str = "city";
 /// Settlement tier (1 = major centre).
 pub const MARKER_TIER: &str = "tier";
 /// Who placed it: "settlements" for markers placed from the settlement list (the editor's bulk
