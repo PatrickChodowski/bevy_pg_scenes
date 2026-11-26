@@ -5,10 +5,32 @@
 //! Keep this in sync with water.wesl. The time is `Time::elapsed_secs_wrapped()`, which is what
 //! Bevy hands the shader as `globals.time`.
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use crate::water::open_sea::OpenSeaField;
-use crate::water::SeaUniform;
+use crate::water::{SeaUniform, WaterData, WaterMaterial};
+
+/// The sea for gameplay systems: `sea()` once the field is baked and the water is there.
+#[derive(SystemParam)]
+pub struct SeaParams<'w> {
+    field:     Option<Res<'w, OpenSeaField>>,
+    water:     Option<Res<'w, WaterData>>,
+    materials: Res<'w, Assets<WaterMaterial>>,
+}
+
+impl SeaParams<'_> {
+    pub fn sea(&self) -> Option<Sea<'_>> {
+        let field = self.field.as_deref()?;
+        let material = self.materials.get(&self.water.as_ref()?.material)?;
+        Some(Sea { field, uniform: &material.extension.sea })
+    }
+
+    /// Sea::ice, 0 without a sea.
+    pub fn ice(&self, xz: Vec2) -> f32 {
+        self.sea().map_or(0.0, |s| s.ice(xz))
+    }
+}
 
 const TAU: f32 = std::f32::consts::TAU;
 const GRAVITY: f32 = 9.81;
@@ -78,14 +100,41 @@ fn wave_patch(w: &[f32; 4], i: usize, xz: Vec2, time: f32, dir: f32) -> f32 {
     0.2 + 1.2 * hash_noise(p)
 }
 
+/// Sea ice (water.wesl's ice_at): water within ICE_SHELTER of land (world units) and shallower
+/// than ICE_SHALLOW is sheltered and freezes first; out past them it's exposed, and the cold
+/// has to beat ICE_EXPOSURE more. It freezes where that's over ICE_FROM, with a ragged edge.
+const ICE_SHELTER: (f32, f32) = (3.0, 60.0);
+const ICE_SHALLOW: (f32, f32) = (0.4, 4.0); // (the depth channel holds 0..5.1)
+const ICE_EXPOSURE: f32 = 0.6;
+const ICE_FROM: f32 = 0.18;
+const ICE_EDGE: f32 = 0.05;
+const ICE_RAGGED: f32 = 0.08;
+const ICE_RAGGED_SCALE: f32 = 0.05;
+
 impl Sea<'_> {
-    /// water.wesl's openness: 0 at the coast and over shallows .. 1 out at open sea.
+    /// water.wesl's openness: 0 at the coast and over shallows .. 1 out at open sea (and 0 under
+    /// ice).
     pub fn openness(&self, xz: Vec2) -> f32 {
         if self.uniform.enabled < 0.5 {
             return 0.0;
         }
         smoothstep(self.uniform.calm_distance, self.uniform.open_distance, self.field.distance(xz))
             * smoothstep(WAVE_MIN_DEPTH, WAVE_FULL_DEPTH, self.field.depth(xz))
+            * (1.0 - self.ice(xz))
+    }
+
+    /// How frozen the water is at `xz`: 0 open .. 1 ice (water.wesl's ice_at). Boats don't
+    /// get through ice.
+    pub fn ice(&self, xz: Vec2) -> f32 {
+        let (u, amount) = (self.uniform.ice, self.uniform.ice_state.x);
+        if amount <= 0.001 || self.uniform.enabled < 0.5 {
+            return 0.0;
+        }
+        let cold = ((xz.dot(Vec2::new(u.x, u.y)) - u.z) / u.w).clamp(0.0, 1.0);
+        let exposure = smoothstep(ICE_SHELTER.0, ICE_SHELTER.1, self.field.distance(xz)) * smoothstep(ICE_SHALLOW.0, ICE_SHALLOW.1, self.field.depth(xz));
+        let ragged = (hash_noise(xz * ICE_RAGGED_SCALE) - 0.5) * ICE_RAGGED;
+        let freeze = cold * amount - ICE_EXPOSURE * exposure + ragged;
+        smoothstep(ICE_FROM, ICE_FROM + ICE_EDGE, freeze)
     }
 
     /// Unit (x, z) direction the swell rolls towards (the stronger one while it turns).
@@ -159,6 +208,38 @@ mod tests {
             assert!((0.0..=1.0).contains(&n));
             assert!((hash_noise(p + Vec2::splat(1e-3)) - n).abs() < 0.01);
         }
+    }
+
+    #[test]
+    fn sheltered_cold_water_freezes_open_sea_and_the_mild_west_dont() {
+        // A strip of sea: near land and shallow at x < 0, far out and deep at x >= 0.
+        let (w, h) = (250usize, 250usize);
+        let mut dist = vec![255u8; w * h];
+        let mut depth = vec![255u8; w * h];
+        for j in 0..h {
+            for i in 0..w / 2 {
+                dist[j * w + i] = 1;
+                depth[j * w + i] = 2;
+            }
+        }
+        let field = OpenSeaField { min: Vec2::splat(-1000.0), texel: 8.0, width: w as u32, height: h as u32, dist, depth: depth.clone(), mean_depth: depth };
+        // Cold rises from 0 at z = -1000 to 1 at z = 0 (towards +z).
+        let mut uniform = SeaUniform { enabled: 1.0, ice: Vec4::new(0.0, 1.0, -1000.0, 1000.0), ice_state: Vec4::new(1.0, 0.0, 0.0, 0.0), ..default() };
+        let sea = Sea { field: &field, uniform: &uniform };
+        // Middling cold (0.5, like the central Baltic): sheltered water freezes, the open sea
+        // doesn't; at full cold (Bothnia, Ladoga) even open water does.
+        let sheltered_cold = Vec2::new(-500.0, -500.0);
+        let open_cold = Vec2::new(500.0, -500.0);
+        let open_coldest = Vec2::new(500.0, -10.0);
+        let sheltered_mild = Vec2::new(-500.0, -950.0);
+        assert!(sea.ice(sheltered_cold) > 0.9, "a cold sound freezes");
+        assert!(sea.ice(open_cold) < 0.1, "the open sea doesn't");
+        assert!(sea.ice(open_coldest) > 0.9, "where it's coldest, even the open water");
+        assert!(sea.ice(sheltered_mild) < 0.1, "nor the mild coast");
+        assert_eq!(sea.openness(sheltered_cold), 0.0, "no waves under ice");
+        uniform.ice_state.x = 0.0;
+        let sea = Sea { field: &field, uniform: &uniform };
+        assert_eq!(sea.ice(sheltered_cold), 0.0, "summer");
     }
 
     #[test]

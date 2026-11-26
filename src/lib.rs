@@ -14,7 +14,7 @@ pub mod prelude {
     pub use crate::types::{SceneData, SceneObjectData, Static, AssetSource, AssetSourceType, AssignComponents, PGSerializedMesh, 
         Markee, Marker, Spawnee, Spawner, MapMeta, MapsData, MapChunk, GameMap, GameMapEntry,
         MARKER_LOCATION, MARKER_ENTRYPORT, MARKER_EXITPORT, MARKER_NAME, MARKER_CITY, MARKER_TIER, MARKER_SOURCE,
-        MARKER_NPC, MARKER_NPC_ID, MARKER_ROLE, MARKER_TITLE, MARKER_BEHAVIOUR, MARKER_IDLE, MARKER_YAW,
+        MARKER_NPC, MARKER_FIRE, MARKER_NPC_ID, MARKER_ROLE, MARKER_TITLE, MARKER_BEHAVIOUR, MARKER_IDLE, MARKER_YAW,
         marker_id, marker_radius,
     };
     pub use crate::events::{LoadMap, LoadScene};
@@ -28,8 +28,8 @@ pub mod prelude {
     pub use crate::terrain::heightmap::{
         MapHeightmap, grid_normal, encode_heights, decode_heights, decode_colors, chunk_mesh,
     };
-    pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, nice_water, simple_water, water_plane, SeaUniform, WaterSplashes};
+    pub use crate::water::{WaterPlugin, WaveUpdate, WaterData, WaterMaterial, WaterMaterialExtension, nice_water, simple_water, water_plane, SeaUniform, SeaIce, WaterSplashes};
     pub use crate::water::open_sea::{OpenSeaField, WATER_LEVEL};
-    pub use crate::water::waves::Sea;
+    pub use crate::water::waves::{Sea, SeaParams};
     pub use crate::weather::{WeatherPlugin, Wind, WindDriver, Rain};
 }

@@ -216,6 +216,8 @@ pub const MARKER_ENTRYPORT: usize = 1;
 pub const MARKER_EXITPORT: usize = 2;
 /// A townsperson the game spawns there (the editor's settlement generator places them).
 pub const MARKER_NPC: usize = 3;
+/// A fire (a town's plaza fire): the game builds and lights it there (lit from dusk to dawn).
+pub const MARKER_FIRE: usize = 4;
 
 /// `Marker::id` for an `EditorAsset::Marker` name; None for an unknown name.
 pub fn marker_id(name: &str) -> Option<usize> {
@@ -224,6 +226,7 @@ pub fn marker_id(name: &str) -> Option<usize> {
         "Marker_EntryPort" => Some(MARKER_ENTRYPORT),
         "Marker_ExitPort" => Some(MARKER_EXITPORT),
         "Marker_NPC" => Some(MARKER_NPC),
+        "Marker_Fire" => Some(MARKER_FIRE),
         _ => None,
     }
 }

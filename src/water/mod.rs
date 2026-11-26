@@ -36,7 +36,8 @@ impl Plugin for WaterPlugin {
         .add_plugins(OpenSeaPlugin)
         .add_plugins(rivers::RiverWaterPlugin)
         .add_systems(PostUpdate, update_water_chunk_data)
-        .add_systems(Update, (follow_wind, track_streaming_focus))
+        .init_resource::<SeaIce>()
+        .add_systems(Update, (follow_wind, apply_ice, track_streaming_focus))
         .add_systems(Startup, setup_water_material)
         // After transforms are final, and before the asset events are flushed: a material change made
         // after that flush only reaches the renderer next frame, so the hull foam lagged the boat.
@@ -263,14 +264,51 @@ pub struct SeaUniform {
     /// Rain (`weather::Rain`): intensity 0..1, and the wind that drifts the rings (x, z: where
     /// it blows to, times its strength), -. Set by `follow_wind`.
     pub rain: Vec4,
+    /// Sea ice (`SeaIce`, set by `apply_ice`): the cold gradient: direction (x, z) it gets colder
+    /// towards, where along it the cold starts and over how far it's full.
+    pub ice: Vec4,
+    /// How frozen it is now (`SeaIce::amount`), -, -, -.
+    pub ice_state: Vec4,
+}
+
+/// Sea ice: the game sets how far into a winter it is (`amount`: 0 none .. ~1 its height, more
+/// in a harsh one) and where it's cold. Water freezes where it's cold enough for the amount,
+/// sheltered water first (rivers, lakes, lagoons, sounds, coasts), open deep sea last
+/// (waves::Sea::ice, the shader's ice_at). Under ice there are no waves, and the ice is drawn.
+#[derive(Resource, Clone, Copy, Debug, PartialEq, Reflect)]
+pub struct SeaIce {
+    pub amount: f32,
+    /// Unit (x, z) direction it gets colder towards.
+    pub cold_dir: Vec2,
+    /// Along `cold_dir` (world units): where the cold starts (0) and how far on it's full (1).
+    pub cold_start: f32,
+    pub cold_span: f32,
+}
+
+impl Default for SeaIce {
+    fn default() -> Self {
+        Self { amount: 0.0, cold_dir: Vec2::X, cold_start: 0.0, cold_span: 1.0 }
+    }
+}
+
+/// `SeaIce` into the water material.
+fn apply_ice(ice: Res<SeaIce>, water: Option<Res<WaterData>>, mut materials: ResMut<Assets<WaterMaterial>>, mut applied: Local<Option<SeaIce>>) {
+    let Some(water) = water else { return };
+    if *applied == Some(*ice) && !water.is_changed() {
+        return;
+    }
+    let Some(mut material) = materials.get_mut(&water.material) else { return };
+    material.extension.sea.ice = Vec4::new(ice.cold_dir.x, ice.cold_dir.y, ice.cold_start, ice.cold_span.max(1e-3));
+    material.extension.sea.ice_state = Vec4::new(ice.amount.max(0.0), 0.0, 0.0, 0.0);
+    *applied = Some(*ice);
 }
 
 impl Default for SeaUniform {
     fn default() -> Self {
         Self {
             rect: Vec4::ZERO,
-            calm_distance: 30.0,
-            open_distance: 350.0,
+            calm_distance: CALM_DISTANCE,
+            open_distance: OPEN_DISTANCE,
             wave_scale: 0.8,
             enabled: 0.0,
             swell_a: Vec4::new(0.35, 1.0, 0.0, 0.0),
@@ -278,6 +316,8 @@ impl Default for SeaUniform {
             focus: Vec4::ZERO,
             rivers: Vec4::ZERO,
             rain: Vec4::ZERO,
+            ice: Vec4::new(1.0, 0.0, 0.0, 1.0),
+            ice_state: Vec4::ZERO,
         }
     }
 }
@@ -310,6 +350,15 @@ const MAX_WAVE_SCALE: f32 = 1.5;
 /// The swell turns (cross-fades to the wind's direction) once the wind is this far off it
 /// (radians), over this many seconds.
 const SWELL_TURN: f32 = 0.35;
+/// Distance from land (world units) where the waves start, and where they're full size
+/// (`SeaUniform`): in ordinary weather ...
+const CALM_DISTANCE: f32 = 30.0;
+const OPEN_DISTANCE: f32 = 350.0;
+/// ... and in a storm (the wave scale from STORM_WAVE_SCALE up to MAX_WAVE_SCALE): the rough sea
+/// comes in close to the coast, into bays and sounds (the shallows still stay flat).
+const STORM_CALM_DISTANCE: f32 = 6.0;
+const STORM_OPEN_DISTANCE: f32 = 70.0;
+const STORM_WAVE_SCALE: f32 = 1.1;
 const SWELL_FADE_SECS: f32 = 25.0;
 
 /// The sea follows the wind: wave height from its strength, and the swell turning to its
@@ -329,6 +378,11 @@ fn follow_wind(
     let target = (CALM_WAVE_SCALE + (GALE_WAVE_SCALE - CALM_WAVE_SCALE) * wind.strength).clamp(0.0, MAX_WAVE_SCALE);
     // The sea builds up and calms down slower than the wind changes.
     sea.wave_scale += (target - sea.wave_scale) * (time.delta_secs() * 0.1).min(1.0);
+    // In a storm the waves come in near the land too (and calm down there as it passes, with
+    // the wave scale). The shader and waves.rs both read these.
+    let storm = storminess(sea.wave_scale);
+    sea.calm_distance = CALM_DISTANCE + (STORM_CALM_DISTANCE - CALM_DISTANCE) * storm;
+    sea.open_distance = OPEN_DISTANCE + (STORM_OPEN_DISTANCE - OPEN_DISTANCE) * storm;
 
     match *fade {
         Some(progress) => {
@@ -358,11 +412,35 @@ fn follow_wind(
 
     let old = &material.extension.sea;
     let changed = (old.wave_scale - sea.wave_scale).abs() > 1e-4 || old.swell_a != sea.swell_a || old.swell_b != sea.swell_b
+        || (old.open_distance - sea.open_distance).abs() > 0.05
         || (old.rain - sea.rain).abs().max_element() > 1e-3;
     if changed {
         if let Some(mut material) = materials.get_mut(&water.material) {
             material.extension.sea = sea;
         }
+    }
+}
+
+/// 0 in ordinary weather .. 1 in a full storm, from the sea's wave scale.
+fn storminess(wave_scale: f32) -> f32 {
+    let t = ((wave_scale - STORM_WAVE_SCALE) / (MAX_WAVE_SCALE - STORM_WAVE_SCALE)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+#[cfg(test)]
+mod storm_tests {
+    use super::*;
+
+    #[test]
+    fn storms_bring_the_waves_in_to_the_coast() {
+        assert_eq!(storminess(CALM_WAVE_SCALE), 0.0);
+        assert_eq!(storminess(0.8), 0.0, "an ordinary day");
+        assert!(storminess(GALE_WAVE_SCALE) > 0.3 && storminess(GALE_WAVE_SCALE) < 1.0);
+        assert_eq!(storminess(MAX_WAVE_SCALE), 1.0);
+        // 40 units off the coast: flat on a calm day, rough in a storm.
+        let open = |calm: f32, full: f32, d: f32| { let t = ((d - calm) / (full - calm)).clamp(0.0, 1.0); t * t * (3.0 - 2.0 * t) };
+        assert!(open(CALM_DISTANCE, OPEN_DISTANCE, 40.0) < 0.01);
+        assert!(open(STORM_CALM_DISTANCE, STORM_OPEN_DISTANCE, 40.0) > 0.4);
     }
 }
 

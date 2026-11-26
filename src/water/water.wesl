@@ -81,6 +81,10 @@ struct Sea {
     rivers: vec4<f32>,
     // Rain: intensity 0..1, the wind (x, z: where it blows to, times its strength), -.
     rain: vec4<f32>,
+    // Sea ice (SeaIce): the cold gradient: direction x, z it gets colder towards, start, span.
+    ice: vec4<f32>,
+    // How frozen it is now (0 none .. ~1 a winter's height), -, -, -.
+    ice_state: vec4<f32>,
 }
 @group(constants::MATERIAL_BIND_GROUP) @binding(105) var open_sea: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(106) var open_sea_sampler: sampler;
@@ -300,14 +304,40 @@ fn sea_mean_depth(xz: vec2<f32>) -> f32 {
     return textureSampleLevel(open_sea, open_sea_sampler, uv, 0.0).b * 255.0 * DEPTH_UNIT;
 }
 
-/// 0 at the coast and over shallows .. 1 out at open sea.
+/// Sea ice: sheltered water (near land, shallow) freezes first; exposed water needs the cold to
+/// beat ICE_EXPOSURE more. Mirrored in waves.rs (Sea::ice): boats are stopped where it's drawn.
+const ICE_SHELTER: vec2<f32> = vec2<f32>(3.0, 60.0);
+const ICE_SHALLOW: vec2<f32> = vec2<f32>(0.4, 4.0); // (the depth channel holds 0..5.1)
+const ICE_EXPOSURE: f32 = 0.6;
+const ICE_FROM: f32 = 0.18;
+const ICE_EDGE: f32 = 0.05;
+const ICE_RAGGED: f32 = 0.08;
+const ICE_RAGGED_SCALE: f32 = 0.05;
+const ICE_BLUE: vec3<f32> = vec3<f32>(0.55, 0.68, 0.78);
+const ICE_WHITE: vec3<f32> = vec3<f32>(0.86, 0.9, 0.94);
+
+/// 0 open water .. 1 ice.
+fn ice_at(xz: vec2<f32>) -> f32 {
+    let amount = sea.ice_state.x;
+    if amount <= 0.001 || sea.enabled < 0.5 {
+        return 0.0;
+    }
+    let field = sea_field(xz);
+    let cold = clamp((dot(xz, sea.ice.xy) - sea.ice.z) / sea.ice.w, 0.0, 1.0);
+    let exposure = smoothstep(ICE_SHELTER.x, ICE_SHELTER.y, field.x) * smoothstep(ICE_SHALLOW.x, ICE_SHALLOW.y, field.y);
+    let ragged = (hash_noise(xz * ICE_RAGGED_SCALE) - 0.5) * ICE_RAGGED;
+    let freeze = cold * amount - ICE_EXPOSURE * exposure + ragged;
+    return smoothstep(ICE_FROM, ICE_FROM + ICE_EDGE, freeze);
+}
+
+/// 0 at the coast and over shallows .. 1 out at open sea (0 under ice).
 fn openness(xz: vec2<f32>) -> f32 {
     if sea.enabled < 0.5 {
         return 0.0;
     }
     let field = sea_field(xz);
     let sea_water = 1.0 - river_at(xz).weight; // rivers and lakes have no swell
-    return smoothstep(sea.calm_distance, sea.open_distance, field.x) * smoothstep(WAVE_MIN_DEPTH, WAVE_FULL_DEPTH, field.y) * sea_water;
+    return smoothstep(sea.calm_distance, sea.open_distance, field.x) * smoothstep(WAVE_MIN_DEPTH, WAVE_FULL_DEPTH, field.y) * sea_water * (1.0 - ice_at(xz));
 }
 
 /// 1 .. 0 towards the edge of the loaded water (the streaming focus' load radius): how much the
@@ -646,6 +676,23 @@ fn fragment(
 
     color += vec3(rain_glint * 0.35) * HIGHLIGHT_COLOR;
 
+    // Ice: flat, matte, white where it's thick (snow on it), bluish towards its edge and where
+    // it's bare; no foam, no rain rings on it.
+    let ice = ice_at(xz);
+    if ice > 0.001 {
+        // Smooth noise at three scales: drifts of snow, bare patches, a fine frost (cell noise
+        // shows its squares here: the ice is flat and close).
+        let grain = hash_noise(xz * 0.045) * 0.55 + hash_noise(xz * 0.21 + vec2(3.1, 7.7)) * 0.3 + hash_noise(xz * 1.1 + vec2(9.3, 1.9)) * 0.15;
+        let thick = smoothstep(0.35, 1.0, ice) * smoothstep(0.3, 0.7, grain);
+        let ice_color = mix(ICE_BLUE, ICE_WHITE, thick) * (0.95 + 0.08 * grain);
+        color = mix(color, ice_color, ice);
+        alpha = mix(alpha, 0.98, ice);
+        let flat_n = normalize(mix(n, vec3(0.0, 1.0, 0.0), ice));
+        pbr_input.N = flat_n;
+        pbr_input.world_normal = flat_n;
+        pbr_input.material.perceptual_roughness = mix(pbr_input.material.perceptual_roughness, 0.55, ice);
+    }
+
     // Foam: a band at the shore with a ragged, moving edge, plus a fainter second line offshore.
     // Smooth noise (not cells) for a ragged, drifting edge: streaks rather than honeycomb.
     let q = in.world_position.xz;
@@ -771,7 +818,7 @@ fn fragment(
             boat_total = max(boat_total, patches(fleck, density) * 0.7);
         }
     }
-    foam = max(foam * (1.0 - near_boat), boat_total);
+    foam = max(foam * (1.0 - near_boat), boat_total) * (1.0 - ice);
 
     color = mix(color, FOAM_COLOR, foam);
     alpha = max(alpha, foam);
