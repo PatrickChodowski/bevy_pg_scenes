@@ -214,6 +214,8 @@ pub struct Markee; // Result of Markers processing
 pub const MARKER_LOCATION: usize = 0;
 pub const MARKER_ENTRYPORT: usize = 1;
 pub const MARKER_EXITPORT: usize = 2;
+/// A townsperson the game spawns there (the editor's settlement generator places them).
+pub const MARKER_NPC: usize = 3;
 
 /// `Marker::id` for an `EditorAsset::Marker` name; None for an unknown name.
 pub fn marker_id(name: &str) -> Option<usize> {
@@ -221,6 +223,7 @@ pub fn marker_id(name: &str) -> Option<usize> {
         "Marker_Locations" => Some(MARKER_LOCATION),
         "Marker_EntryPort" => Some(MARKER_ENTRYPORT),
         "Marker_ExitPort" => Some(MARKER_EXITPORT),
+        "Marker_NPC" => Some(MARKER_NPC),
         _ => None,
     }
 }
@@ -238,6 +241,19 @@ pub const MARKER_NAME: &str = "Name";
 pub const MARKER_CITY: &str = "city";
 /// Settlement tier (1 = major centre).
 pub const MARKER_TIER: &str = "tier";
+/// On an NPC marker (`MARKER_CITY` names its town; its radius is how far it wanders):
+/// a key unique in the world (the same every time its chunk streams in),
+pub const MARKER_NPC_ID: &str = "npc";
+/// what they do there (the game's NPC type: Chieftain, Warrior, Merchant, Generic, ...),
+pub const MARKER_ROLE: &str = "role";
+/// how they're addressed (Jarl, King, Bishop, ...; leaders mostly),
+pub const MARKER_TITLE: &str = "title";
+/// "stand" (stays put, facing `MARKER_YAW`) or "wander" (strolls about within the radius),
+pub const MARKER_BEHAVIOUR: &str = "behaviour";
+/// their idle animation (by name, e.g. "LookingAround"; the game's default if missing),
+pub const MARKER_IDLE: &str = "idle";
+/// and which way they face: radians about Y, 0 = towards +Z.
+pub const MARKER_YAW: &str = "yaw";
 /// Who placed it: "settlements" for markers placed from the settlement list (the editor's bulk
 /// import replaces those), absent for hand-placed ones.
 pub const MARKER_SOURCE: &str = "source";

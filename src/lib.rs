@@ -14,6 +14,7 @@ pub mod prelude {
     pub use crate::types::{SceneData, SceneObjectData, Static, AssetSource, AssetSourceType, AssignComponents, PGSerializedMesh, 
         Markee, Marker, Spawnee, Spawner, MapMeta, MapsData, MapChunk, GameMap, GameMapEntry,
         MARKER_LOCATION, MARKER_ENTRYPORT, MARKER_EXITPORT, MARKER_NAME, MARKER_CITY, MARKER_TIER, MARKER_SOURCE,
+        MARKER_NPC, MARKER_NPC_ID, MARKER_ROLE, MARKER_TITLE, MARKER_BEHAVIOUR, MARKER_IDLE, MARKER_YAW,
         marker_id, marker_radius,
     };
     pub use crate::events::{LoadMap, LoadScene};
