@@ -237,13 +237,12 @@ fn transition_load_scene_data(
                 LoadPlayerScene{player_ready: false}
             );
         }
-        SetScene::Save(ref save_name) => {
-            // commands.insert_resource(
-            //     LoadSaveResources {
-            //         loaded_entities: false,
-            //         loaded_resources: false,
-            //         handle_save_entities:  ass.load(format!("saves/{}.scn.ron", save_name))
-            // });
+        // A saved game: the game puts the player (and what it saved) back in place of the new
+        // game's start, then moves the transition on (as for Start).
+        SetScene::Save(_) => {
+            commands.insert_resource(
+                LoadPlayerScene{player_ready: false}
+            );
         }
     }
 }
